@@ -1,0 +1,45 @@
+[project]
+name = "sprintsmith"
+version = "0.1.0"
+description = "Provider-neutral enterprise search and RAG platform"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+	"fastapi>=0.115,<1.0",
+	"prometheus-client>=0.21,<1.0",
+	"pydantic-settings>=2.6,<3.0",
+	"uvicorn[standard]>=0.34,<1.0",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["apps/api"]
+
+[project.optional-dependencies]
+dev = [
+	"httpx>=0.28,<1.0",
+	"pytest>=8.3,<9.0",
+	"pytest-cov>=6.0,<7.0",
+	"ruff>=0.9,<1.0",
+]
+
+[project.scripts]
+sprintsmith-api = "app.main:run"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["apps/api"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.coverage.run]
+branch = true
+source = ["apps/api/app"]

@@ -1,0 +1,1 @@
+"""SprintSmith asynchronous worker."""
