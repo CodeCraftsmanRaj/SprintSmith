@@ -72,7 +72,10 @@ class Settings:
 
     def validate(self):
         # Gemini key is always needed for embeddings, regardless of LLM routing.
-        _require("GOOGLE_API_KEY")
+        if not self.GOOGLE_API_KEY or self.GOOGLE_API_KEY == "CHANGE_ME":
+            raise RuntimeError(
+                "Missing required env var: GOOGLE_API_KEY. Copy .env.example to .env and fill it in."
+            )
         for alias in (self.DEFAULT_LLM, self.FALLBACK_LLM):
             if alias and alias.startswith("groq") and not self.GROQ_API_KEY:
                 raise RuntimeError(f"GROQ_API_KEY is required because '{alias}' is configured.")

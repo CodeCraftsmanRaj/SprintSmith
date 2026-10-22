@@ -20,7 +20,7 @@ langgraph>=0.2.6,<0.3           # 1.x requires langchain-core 1.x — do not flo
 
 # --- Document ingestion ---
 docling==2.15.1                # Structure-aware PDF/DOCX parsing (headings, tables, pages). Pulls torch (~2.5 GB installed)
-docling-core==2.13.1           # Coupled pins: newer docling-core (2.8x) removes legacy BoundingBox that docling 2.15 imports
+docling-core>=2.14,<2.15       # Compatible with docling 2.15; 2.13.1 is no longer published for current Python images
 docling-ibm-models==3.1.0      # Coupled pin: 3.15 requires docling-core>=2.33
 docling-parse==3.0.0           # Coupled pin: 3.4 requires docling-core>=2.14
 numpy==1.26.4                  # langchain-community requires numpy<2; docling would otherwise upgrade it

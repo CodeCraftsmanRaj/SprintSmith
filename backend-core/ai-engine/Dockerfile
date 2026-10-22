@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /srv
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir --no-build-isolation -r requirements.txt
 
 # Pre-bake Docling layout/table models (~200 MB) so the first /ingest does not download them
 # at request time (IMPLEMENTATION.draft.md §11 W-1).
