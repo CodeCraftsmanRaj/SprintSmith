@@ -1,0 +1,48 @@
+name: DevPilot AI Engine
+
+on:
+  push:
+    paths:
+      - "backend-core/ai-engine/**"
+      - ".github/workflows/ai-engine-core.yml"
+  pull_request:
+    paths:
+      - "backend-core/ai-engine/**"
+      - ".github/workflows/ai-engine-core.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: backend-core/ai-engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend-core/ai-engine/requirements-dev.txt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/docling
+          key: ai-engine-models-${{ hashFiles('backend-core/ai-engine/requirements.txt') }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements-dev.txt
+      - run: ./run_tests.sh coverage --junitxml=junit-ai.xml --cov-report=xml
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: devpilot-ai-engine-test-reports
+          path: |
+            backend-core/ai-engine/junit-ai.xml
+            backend-core/ai-engine/coverage.xml
+            backend-core/ai-engine/var/coverage_html
+          if-no-files-found: warn

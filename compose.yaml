@@ -5,11 +5,16 @@ services:
       dockerfile: infra/docker/api.Dockerfile
     environment:
       SPRINTSMITH_DATABASE_URL: postgresql://sprintsmith:sprintsmith@db:5432/sprintsmith
+      SPRINTSMITH_UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads_data:/data/uploads
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+      uploads-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -49,9 +54,70 @@ services:
     build:
       context: .
       dockerfile: infra/docker/worker.Dockerfile
+    environment:
+      SPRINTSMITH_DATABASE_URL: postgresql://sprintsmith:sprintsmith@db:5432/sprintsmith
+      SPRINTSMITH_UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads_data:/data/uploads
     depends_on:
       db:
         condition: service_healthy
+      uploads-init:
+        condition: service_completed_successfully
+
+  backend-core:
+    profiles: [core]
+    build:
+      context: ./backend-core/backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://sprintsmith:sprintsmith@db:5432/sprintsmith
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-local-development-only-change-me}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      AI_ENGINE_URL: http://ai-engine:8001
+      UPLOAD_DIR: /shared/uploads
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      AUTO_CREATE_TABLES: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8002:8000"
+    volumes:
+      - core_uploads:/shared/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      ai-engine:
+        condition: service_started
+
+  ai-engine:
+    profiles: [core]
+    build:
+      context: ./backend-core/ai-engine
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://sprintsmith:sprintsmith@db:5432/sprintsmith
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      DEFAULT_LLM: ${DEFAULT_LLM:-local}
+      FALLBACK_LLM: ${FALLBACK_LLM:-local}
+      RETRIEVAL_MODE: ${RETRIEVAL_MODE:-hybrid}
+      AI_ENGINE_PORT: "8001"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      COLLECTION_NAME: ${COLLECTION_NAME:-sprintsmith_requirements}
+    ports:
+      - "8001:8001"
+    volumes:
+      - core_uploads:/shared/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  uploads-init:
+    image: alpine:3.22
+    command: ["sh", "-c", "mkdir -p /data/uploads && chown -R 65534:65534 /data/uploads"]
+    user: "0:0"
+    volumes:
+      - uploads_data:/data/uploads
 
   db:
     image: pgvector/pgvector:pg17
@@ -63,13 +129,15 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/db/init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sprintsmith -d sprintsmith"]
       interval: 5s
       timeout: 5s
       retries: 10
-
 volumes:
   postgres_data:
   prometheus_data:
   grafana_data:
+  uploads_data:
+  core_uploads:

@@ -11,5 +11,11 @@ dist/
 *.egg-info/
 data/
 *.log
-DevPilot_UseCase_v1.0_Standard\ (1).docx
-devpilot-barclaysMDM-backend-core.zip
+docs/*.docx
+backend-core/**/.env
+backend-core/**/.venv/
+backend-core/**/venv/
+backend-core/**/__pycache__/
+backend-core/**/.pytest_cache/
+backend-core/**/.ruff_cache/
+backend-core/**/var/

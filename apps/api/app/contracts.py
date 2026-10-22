@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -24,3 +26,36 @@ class SearchResponse(BaseModel):
     query: str
     mode: str
     results: list[SearchResult]
+
+
+class DocumentResponse(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    filename: str
+    content_type: str
+    status: str
+    checksum: str
+
+
+class JobResponse(BaseModel):
+    id: UUID
+    document_id: UUID
+    status: str
+    attempts: int
+    error: str | None = None
+
+
+class EntityResponse(BaseModel):
+    id: UUID
+    name: str
+    entity_type: str
+    properties: dict[str, object]
+
+
+class RelationshipResponse(BaseModel):
+    id: UUID
+    subject: str
+    predicate: str
+    object: str
+    confidence: float
+    source_chunk_id: UUID | None = None

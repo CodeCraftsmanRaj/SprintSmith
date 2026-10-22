@@ -47,6 +47,7 @@ docker compose down -v
 - `infra/docker`: service images
 - `tests`: executable contracts and integration tests
 - `.github/workflows`: CI checks
+- `backend-core`: integrated production backend and AI engine
 
 The backend is intentionally split into two deployable boundaries inside this
 monorepo: `apps/api` owns HTTP contracts and `apps/worker` will own asynchronous
@@ -66,6 +67,8 @@ for later work and is not included yet.
 - Non-root API and worker Docker images
 - GitHub Actions workflow for dependency installation, Ruff, pytest, and Compose validation
 - Reproducible Python dependency lockfile through `uv.lock`
+- Integrated DevPilot backend gateway with auth, projects, requirements, artifacts, generation, evaluation, exports, audit, and traceability APIs
+- Integrated DevPilot AI engine with async ingestion, hybrid/vector retrieval, generation, streaming, comparison, prompts, and offline evaluation
 
 The supplied DOCX and ZIP are reference material only. They are not imported
 as runtime dependencies. Do not commit extracted contents, secrets, raw
@@ -85,6 +88,8 @@ Open these addresses in a browser while the stack is running:
 | Prometheus targets | [localhost:9090/targets](http://localhost:9090/targets) | Confirm scrape status is `UP` |
 | Grafana | [localhost:3000](http://localhost:3000) | Local dashboards, anonymous viewer access |
 | Grafana dashboard | [SprintSmith API dashboard](http://localhost:3000/d/sprintsmith-api/sprintsmith-api) | Request rate, p95 latency, response status |
+| Integrated backend docs | [localhost:8002/docs](http://localhost:8002/docs) | Frontend-facing DevPilot OpenAPI UI when the `core` profile is running |
+| AI engine docs | [localhost:8001/docs](http://localhost:8001/docs) | Internal RAG/generation API when the `core` profile is running |
 
 Grafana is configured for local viewing only. It has anonymous viewer access
 and must not be exposed publicly without authentication and network controls.
@@ -114,6 +119,54 @@ curl http://localhost:3000/api/health
 The expected Prometheus target jobs are `prometheus` and `sprintsmith-api`,
 both with health `up`.
 
+## Integrated backend core
+
+The integrated `backend-core` services are connected as an opt-in
+Compose profile. The default stack stays lightweight; start the complete core
+stack only after installing its dependencies and providing runtime secrets:
+
+```bash
+docker compose --profile core up -d --build
+curl http://localhost:8002/health
+curl http://localhost:8001/health
+```
+
+The core backend uses port `8002` so it does not collide with the SprintSmith
+platform API on `8000`. The AI engine uses `8001`. Both use the Compose
+PostgreSQL service and the shared `core_uploads` volume. The AI image is large
+because Docling and its document models are included; this is why it is not in
+the default local startup path.
+
+The frontend endpoint catalog is maintained in
+[docs/frontend-api.md](docs/frontend-api.md). The interactive contract is also
+available at [localhost:8002/docs](http://localhost:8002/docs) after the core
+profile starts.
+
+## Cloudflare and hosting
+
+Local Docker is the development and integration environment, not the public
+hosting target. The production shape is:
+
+```text
+frontend hosting -> Cloudflare DNS/proxy -> public container host
+									  -> backend-core API
+									  -> AI engine
+									  -> managed PostgreSQL/pgvector
+```
+
+Cloudflare DNS should point a dedicated API hostname such as
+`api.rajmathuria.me` to the selected container host. Do not change
+`portfolio.rajmathuria.me`. Cloudflare cannot run this arbitrary Docker Compose
+stack by itself; it provides DNS/proxy/TLS while the containers run on a
+Docker-capable host. A free-tier container host or a small always-on VM must be
+selected after checking current limits, persistent storage, outbound model
+costs, and billing requirements.
+
+Before public deployment, provide access through the normal secret mechanisms:
+GitHub Actions repository administration, Cloudflare DNS/API token, selected
+cloud account/region, and rotated model/database credentials. No credentials
+belong in this repository.
+
 ## Local checks
 
 ```bash
@@ -127,6 +180,12 @@ git diff --check
 The GitHub Actions workflow runs the same core checks on pushes to `main` and
 on pull requests. View results at the repository's GitHub Actions page:
 [github.com/CodeCraftsmanRaj/SprintSmith/actions](https://github.com/CodeCraftsmanRaj/SprintSmith/actions).
+
+The root workflows also run the integrated backend-core suites when their
+paths change:
+
+- `DevPilot Backend Core`: backend tests, coverage, Alembic migration, and PostgreSQL integration tests
+- `DevPilot AI Engine`: keyless offline AI-engine tests with dependency/model caching
 
 ## Local services
 
