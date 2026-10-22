@@ -1,6 +1,6 @@
 import uuid
 
-from app.domain.models import Artifact, Project, Requirement
+from app.domain.models import Artifact, Requirement
 from app.services.ai_engine import AIEngineClient
 
 
@@ -38,8 +38,11 @@ def test_chat_persists_turns_and_stats_reports_generation(client, dev_headers, m
 
 
 def test_gherkin_and_zip_exports(client, dev_user, dev_headers, db_session):
-    project_id = str(uuid.uuid4())
-    db_session.add(Project(id=project_id, name="Export project", description="", owner_id=dev_user.id))
+    project_id = client.post(
+        "/api/v1/projects",
+        json={"name": "Export project"},
+        headers=dev_headers,
+    ).json()["id"]
     criteria = Artifact(id=str(uuid.uuid4()), project_id=project_id, created_by=dev_user.id,
         artifact_type="acceptance_criteria", title="Payment criteria",
         content={"user_story_title": "Pay an invoice", "criteria": [{

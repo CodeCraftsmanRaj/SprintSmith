@@ -16,6 +16,23 @@ docker compose up -d --build
 docker compose ps
 ```
 
+For the complete application, including the integrated backend gateway and AI
+engine, use the `core` profile:
+
+```bash
+make up-core
+make test
+make smoke
+make logs
+```
+
+This starts the platform API on `8000`, AI engine on `8001`, integrated backend
+gateway on `8002`, PostgreSQL on `5433`, Prometheus on `9090`, and Grafana on
+`3000`. The AI engine image is intentionally large because it includes Docling
+and document models. Swagger is available at
+[localhost:8002/docs](http://localhost:8002/docs) for the integrated backend
+and [localhost:8000/docs](http://localhost:8000/docs) for the platform API.
+
 Check the running API:
 
 ```bash
@@ -180,6 +197,10 @@ git diff --check
 The GitHub Actions workflow runs the same core checks on pushes to `main` and
 on pull requests. View results at the repository's GitHub Actions page:
 [github.com/CodeCraftsmanRaj/SprintSmith/actions](https://github.com/CodeCraftsmanRaj/SprintSmith/actions).
+
+The `Full Stack Platform` workflow runs root unit tests, validates both Compose
+profiles, starts the platform services, and runs the API smoke test. The
+backend-core and AI-engine workflows run their dedicated suites separately.
 
 The root workflows also run the integrated backend-core suites when their
 paths change:
