@@ -50,3 +50,4 @@ python-dotenv==1.0.1
 
 # --- Optional fallback provider (Mistral) ---
 langchain-mistralai==0.2.1
+greenlet>=3.0.0
