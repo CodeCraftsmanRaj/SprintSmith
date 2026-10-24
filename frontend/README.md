@@ -1,29 +1,24 @@
-# Welcome to your Lovable project
+# DevPilot frontend
 
-This project was built with [Lovable](https://lovable.dev).
+The frontend is a TanStack Start and React project. It connects to the backend gateway and uses its authentication, project, requirement ingestion, and artifact generation APIs.
 
-## Build with Lovable
+## Run locally
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+Start only the database and the API services used by this frontend from the repository root:
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+docker compose --profile core up -d --build db backend-core ai-engine
+```
+
+The unrestricted Compose command also starts the separate API, worker, Prometheus, and Grafana services, which this frontend does not need.
+
+Copy `.env.example` to `.env` if you need to change the API address. The default is `http://localhost:8002`.
+
+Install frontend dependencies and start the app:
+
+```sh
+npm install
 npm run dev
 ```
 
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+Open the local URL printed by Vite. In the Codex preview environment this is `http://localhost:8080`; other environments may choose another available port. `CORS_ORIGINS` includes ports 3000 and 8080 in the root `.env` and `.env.example`. If Vite prints a different origin, add it to `CORS_ORIGINS` and restart `backend-core`.
