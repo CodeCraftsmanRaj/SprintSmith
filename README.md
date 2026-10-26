@@ -1,4 +1,4 @@
-# SprintSmith v1
+# SprintSmith v2
 
 Provider-neutral enterprise search and RAG platform. The current foundation is
 Dockerized, observable, and ready for the ingestion and hybrid retrieval slices.
