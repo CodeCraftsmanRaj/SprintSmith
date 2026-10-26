@@ -84,6 +84,8 @@ jobs:
           envs: IMAGE_TAG
           script: |
             cd /opt/sprintsmith
+            mkdir -p infra/deploy
+            mv -f compose.production.yaml infra/deploy/compose.production.yaml
             test -f infra/deploy/compose.production.yaml
             sed -i "s#ghcr.io/codecraftsmanraj/sprintsmith-backend-core:main#ghcr.io/codecraftsmanraj/sprintsmith-backend-core:${IMAGE_TAG}#" .env
             sed -i "s#ghcr.io/codecraftsmanraj/sprintsmith-ai-engine:main#ghcr.io/codecraftsmanraj/sprintsmith-ai-engine:${IMAGE_TAG}#" .env
