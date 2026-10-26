@@ -2,9 +2,7 @@ name: DevPilot AI Engine
 
 on:
   push:
-    paths:
-      - "backend-core/ai-engine/**"
-      - ".github/workflows/ai-engine-core.yml"
+    branches: [main]
   pull_request:
     paths:
       - "backend-core/ai-engine/**"

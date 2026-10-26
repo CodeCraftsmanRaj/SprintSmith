@@ -3,13 +3,6 @@ name: Production Deployment
 on:
   push:
     branches: [main]
-    paths:
-      - "backend-core/**"
-      - "frontend/**"
-      - "infra/deploy/**"
-      - "compose.yaml"
-      - "wrangler.jsonc"
-      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 permissions:
