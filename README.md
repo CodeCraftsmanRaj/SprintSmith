@@ -184,6 +184,11 @@ GitHub Actions repository administration, Cloudflare DNS/API token, selected
 cloud account/region, and rotated model/database credentials. No credentials
 belong in this repository.
 
+The complete deployment runbook is in [docs/deployment.md](docs/deployment.md).
+The production workflow is `.github/workflows/deploy.yml`; it publishes images
+to GHCR, deploys the backend to a Docker VM, and deploys the frontend to
+Cloudflare Workers.
+
 ## Local checks
 
 ```bash
