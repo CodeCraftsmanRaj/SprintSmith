@@ -1,9 +1,9 @@
 # Production Deployment
 
-## Recommended free-first topology
+## Backend deployment
 
 - Frontend: Cloudflare Workers deployment from `frontend/`.
-- Backend: Oracle Cloud Always Free VM or another Docker-capable free-tier VM.
+- Backend: a Docker-capable VM (for example, Google Compute Engine).
 - Database: PostgreSQL/pgvector on the same VM initially.
 - Registry: GitHub Container Registry (GHCR).
 - DNS/TLS: Cloudflare DNS and proxy.
@@ -21,22 +21,18 @@ sudo chown -R "$USER":"$USER" /opt/sprintsmith
 
 Copy `infra/deploy/.env.production.example` to `/opt/sprintsmith/.env` and replace every placeholder. Never commit that file.
 
-The VM must be able to pull private GHCR images. Configure these GitHub `production` environment secrets:
+The production workflow publishes images to `ghcr.io/devansh-12` and deploys the backend to the VM over SSH. The VM must be able to pull private GHCR images. Configure these GitHub repository secrets (or `production` environment secrets if that environment is configured for both publishing and deployment):
 
 - `BACKEND_HOST`: VM public hostname or IP
 - `BACKEND_USER`: SSH deployment user
 - `BACKEND_SSH_KEY`: private SSH key
 - `GHCR_READ_USER`: GitHub package reader
-- `GHCR_READ_TOKEN`: read-only GHCR token
-- `CLOUDFLARE_API_TOKEN`: scoped Workers/DNS token
-- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare account ID
+- `GHCR_READ_TOKEN`: a read-only token with `read:packages`
 
-Add the non-secret `PUBLIC_API_URL` environment variable, for example `https://api.rajmathuria.me`.
-
-Backend deployment is disabled until a VM is ready. Leave the GitHub production
-variable `BACKEND_DEPLOY_ENABLED` unset or set it to `false`. The frontend can
-deploy independently. Set it to `true` only after `BACKEND_HOST`,
+Set the repository Actions variable `BACKEND_DEPLOY_ENABLED` to `true` only after `BACKEND_HOST`,
 `BACKEND_USER`, and `BACKEND_SSH_KEY` are configured and the VM is prepared.
+The frontend job is skipped unless the repository Actions variable
+`DEPLOY_FRONTEND` is exactly `true`.
 
 ## DNS
 
@@ -54,8 +50,7 @@ Pushes to `main` run `.github/workflows/deploy.yml` when backend, frontend, or d
 1. Build and publish backend-core and AI-engine images to GHCR.
 2. SSH to the VM, pull immutable commit-tagged images, run migrations, and restart the backend stack.
 3. Check `/health` on the deployed backend.
-4. Build the TanStack frontend with `VITE_API_URL`.
-5. Deploy the frontend Worker to Cloudflare.
+4. The frontend deploy job is skipped unless `DEPLOY_FRONTEND` is set to `true`.
 
 The workflow is also available through **Actions > Production Deployment > Run workflow**. The first deployment should be approved through the GitHub `production` environment.
 

@@ -18,7 +18,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: ghcr.io/codecraftsmanraj
+  IMAGE_NAMESPACE: ghcr.io/devansh-12
 
 jobs:
   publish-backend:
@@ -79,25 +79,29 @@ jobs:
         uses: appleboy/ssh-action@v1
         env:
           IMAGE_TAG: ${{ github.sha }}
+          IMAGE_NAMESPACE: ${{ env.IMAGE_NAMESPACE }}
+          GHCR_READ_USER: ${{ secrets.GHCR_READ_USER }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
         with:
           host: ${{ secrets.BACKEND_HOST }}
           username: ${{ secrets.BACKEND_USER }}
           key: ${{ secrets.BACKEND_SSH_KEY }}
-          envs: IMAGE_TAG
+          envs: IMAGE_TAG,IMAGE_NAMESPACE,GHCR_READ_USER,GHCR_READ_TOKEN
           script: |
             cd /opt/sprintsmith
             mkdir -p infra/deploy
             mv -f compose.production.yaml infra/deploy/compose.production.yaml
             test -f infra/deploy/compose.production.yaml
-            sed -i "s#ghcr.io/codecraftsmanraj/sprintsmith-backend-core:main#ghcr.io/codecraftsmanraj/sprintsmith-backend-core:${IMAGE_TAG}#" .env
-            sed -i "s#ghcr.io/codecraftsmanraj/sprintsmith-ai-engine:main#ghcr.io/codecraftsmanraj/sprintsmith-ai-engine:${IMAGE_TAG}#" .env
-            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_READ_USER }}" --password-stdin
+            sed -i "s#^BACKEND_IMAGE=.*#BACKEND_IMAGE=${IMAGE_NAMESPACE}/sprintsmith-backend-core:${IMAGE_TAG}#" .env
+            sed -i "s#^AI_ENGINE_IMAGE=.*#AI_ENGINE_IMAGE=${IMAGE_NAMESPACE}/sprintsmith-ai-engine:${IMAGE_TAG}#" .env
+            echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u "$GHCR_READ_USER" --password-stdin
             docker compose --env-file .env -f infra/deploy/compose.production.yaml pull
             docker compose --env-file .env -f infra/deploy/compose.production.yaml up -d
             curl --fail --retry 10 --retry-delay 5 http://localhost:8002/health
 
   deploy-frontend:
     name: Deploy frontend to Cloudflare
+    if: vars.DEPLOY_FRONTEND == 'true'
     runs-on: ubuntu-latest
     environment: production
     steps:
