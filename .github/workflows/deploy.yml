@@ -23,6 +23,7 @@ env:
 jobs:
   publish-backend:
     name: Publish backend images
+    if: vars.BACKEND_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +61,7 @@ jobs:
 
   deploy-backend:
     name: Deploy backend VM
+    if: vars.BACKEND_DEPLOY_ENABLED == 'true'
     needs: publish-backend
     runs-on: ubuntu-latest
     environment: production

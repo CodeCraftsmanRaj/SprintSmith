@@ -189,6 +189,10 @@ The production workflow is `.github/workflows/deploy.yml`; it publishes images
 to GHCR, deploys the backend to a Docker VM, and deploys the frontend to
 Cloudflare Workers.
 
+Backend deployment is currently opt-in. Set the production variable
+`BACKEND_DEPLOY_ENABLED=true` only after the backend VM and SSH secrets are
+ready; frontend deployment does not depend on the backend deployment.
+
 ## Local checks
 
 ```bash

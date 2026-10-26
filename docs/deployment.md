@@ -33,6 +33,11 @@ The VM must be able to pull private GHCR images. Configure these GitHub `product
 
 Add the non-secret `PUBLIC_API_URL` environment variable, for example `https://api.rajmathuria.me`.
 
+Backend deployment is disabled until a VM is ready. Leave the GitHub production
+variable `BACKEND_DEPLOY_ENABLED` unset or set it to `false`. The frontend can
+deploy independently. Set it to `true` only after `BACKEND_HOST`,
+`BACKEND_USER`, and `BACKEND_SSH_KEY` are configured and the VM is prepared.
+
 ## DNS
 
 Keep `portfolio.rajmathuria.me` unchanged. Add separate records:
