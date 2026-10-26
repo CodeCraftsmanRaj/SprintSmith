@@ -45,7 +45,7 @@ Add the API hostname to `CORS_ORIGINS` in the VM `.env`. The frontend receives t
 
 ## Deployment pipeline
 
-Pushes to `main` run `.github/workflows/deploy.yml` when backend, frontend, or deployment files change:
+Every push to `main` runs `.github/workflows/deploy.yml`. Backend image publishing and VM deployment happen when the repository Actions variable `BACKEND_DEPLOY_ENABLED` is exactly `true`; the frontend job is skipped unless `DEPLOY_FRONTEND` is exactly `true`.
 
 1. Build and publish backend-core and AI-engine images to GHCR.
 2. SSH to the VM, pull immutable commit-tagged images, run migrations, and restart the backend stack.
