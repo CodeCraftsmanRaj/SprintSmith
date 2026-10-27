@@ -165,29 +165,34 @@ Local Docker is the development and integration environment, not the public
 hosting target. The production shape is:
 
 ```text
-frontend hosting -> Cloudflare DNS/proxy -> public container host
-									  -> backend-core API
-									  -> AI engine
-									  -> managed PostgreSQL/pgvector
+frontend hosting -> Cloudflare DNS/proxy -> GCE VM (Caddy HTTPS)
+                                      -> backend-core API
+                                      -> private AI engine
+                                      -> private PostgreSQL/pgvector
 ```
 
-Cloudflare DNS should point a dedicated API hostname such as
-`api.rajmathuria.me` to the selected container host. Do not change
-`portfolio.rajmathuria.me`. Cloudflare cannot run this arbitrary Docker Compose
-stack by itself; it provides DNS/proxy/TLS while the containers run on a
-Docker-capable host. A free-tier container host or a small always-on VM must be
-selected after checking current limits, persistent storage, outbound model
-costs, and billing requirements.
+The GCP deployment uses `sprintsmith-api.rajmathuria.me` for the backend API
+and `app.rajmathuria.me` for the frontend. Keep any existing
+`api.rajmathuria.me` service and `portfolio.rajmathuria.me` unchanged. Point
+the SprintSmith API hostname at the GCE VM's reserved external IP and add the
+frontend hostname as a Cloudflare Worker custom domain. Cloudflare provides
+DNS/proxy while Caddy on the VM terminates HTTPS and renews the origin
+certificate. The database and AI engine are not exposed publicly.
 
-Before public deployment, provide access through the normal secret mechanisms:
-GitHub Actions repository administration, Cloudflare DNS/API token, selected
-cloud account/region, and rotated model/database credentials. No credentials
-belong in this repository.
+Deploy from an authenticated Google Cloud CLI session with:
+
+```bash
+bash infra/deploy/deploy-gcp.sh
+```
+
+Application secrets remain in `/opt/sprintsmith/.env` on the VM and are never
+uploaded with the Cloud Build source. No credentials belong in this repository.
 
 The complete deployment runbook is in [docs/deployment.md](docs/deployment.md).
 The production workflow is `.github/workflows/deploy.yml`; it publishes images
-to GHCR, deploys the backend to a Docker VM, and deploys the frontend to
-Cloudflare Workers.
+to GHCR for the optional GitHub Actions path and deploys the frontend to
+Cloudflare Workers. The GCP-native script builds images with Cloud Build and
+publishes them to Artifact Registry.
 
 Backend deployment is currently opt-in. Set the production variable
 `BACKEND_DEPLOY_ENABLED=true` only after the backend VM and SSH secrets are
