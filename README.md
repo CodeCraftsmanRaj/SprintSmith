@@ -189,14 +189,10 @@ Application secrets remain in `/opt/sprintsmith/.env` on the VM and are never
 uploaded with the Cloud Build source. No credentials belong in this repository.
 
 The complete deployment runbook is in [docs/deployment.md](docs/deployment.md).
-The production workflow is `.github/workflows/deploy.yml`; it publishes images
-to GHCR for the optional GitHub Actions path and deploys the frontend to
-Cloudflare Workers. The GCP-native script builds images with Cloud Build and
-publishes them to Artifact Registry.
-
-Backend deployment is currently opt-in. Set the production variable
-`BACKEND_DEPLOY_ENABLED=true` only after the backend VM and SSH secrets are
-ready; frontend deployment does not depend on the backend deployment.
+The five GitHub Actions workflows all start on every push. The production
+workflow runs deployment jobs only on `main`, uses GitHub OIDC
+Workload Identity Federation to build and deploy through GCP, and deploys the
+frontend after the backend when `DEPLOY_FRONTEND=true`.
 
 ## Local checks
 
@@ -208,13 +204,14 @@ docker compose config
 git diff --check
 ```
 
-The GitHub Actions workflow runs the same core checks on pushes to `main` and
-on pull requests. View results at the repository's GitHub Actions page:
+The GitHub Actions workflows run on every push and on pull requests. View
+results at the repository's GitHub Actions page:
 [github.com/CodeCraftsmanRaj/SprintSmith/actions](https://github.com/CodeCraftsmanRaj/SprintSmith/actions).
 
-The `Full Stack Platform` workflow runs root unit tests, validates both Compose
-profiles, starts the platform services, and runs the API smoke test. The
-backend-core and AI-engine workflows run their dedicated suites separately.
+The `CI` workflow owns root unit tests and linting. The `Full Stack Platform`
+workflow validates Compose, starts the platform services, and runs the API
+smoke test. The backend-core and AI-engine workflows run their dedicated
+suites separately.
 
 The root workflows also run the integrated backend-core suites when their
 paths change:

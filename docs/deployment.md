@@ -3,49 +3,45 @@
 ## Backend deployment
 
 - Frontend: Cloudflare Workers deployment from `frontend/`.
-- Backend: a Docker-capable VM (for example, Google Compute Engine).
-- Database: PostgreSQL/pgvector on the same VM initially.
-- Registry: Google Artifact Registry for the GCP-native deployment path.
+- Backend: Google Compute Engine VM `sprintsmith-backend` in `us-central1-a`.
+- Database: PostgreSQL/pgvector in the private Docker Compose network on the VM.
+- Registry: Google Artifact Registry repository `devpilot-repo` in `us-central1`.
 - DNS/TLS: Cloudflare DNS and proxy.
 
 Cloudflare cannot host the Dockerized PostgreSQL, worker, and AI-engine stack directly. The backend VM is required. Free-tier availability, billing verification, storage, and resource limits can change, so confirm them in the provider account before production use.
 
+## Current deployed state
+
+- GCP project: `major-project-512815`
+- VM: `sprintsmith-backend`, zone `us-central1-a`
+- Reserved external IP: `34.9.97.6`
+- API: `https://sprintsmith-api.rajmathuria.me`
+- Frontend hostname: `app.rajmathuria.me`
+- Existing `api.rajmathuria.me` and `portfolio.rajmathuria.me` are separate
+  hostnames and must not be changed for this deployment.
+- The Compose services are `backend-core`, `ai-engine`, `db`, and `caddy`.
+  The backend binds to loopback port `8002`; only Caddy's ports 80/443 are
+  public. The AI engine and database are private.
+
+The backend and AI engine have been deployed. The API's `/health`, `/health/db`,
+`/health/ai`, and `/docs` have returned HTTP 200 on the VM, and the public API
+health endpoint has been verified over HTTPS. Provider keys are stored in the
+VM's `/opt/sprintsmith/.env`; never print or commit that file.
+
 ## One-time backend VM setup
 
-Create a Linux VM, install Docker Compose, open only SSH and HTTPS, then run:
-
 ```bash
-sudo mkdir -p /opt/sprintsmith/infra/deploy
-sudo chown -R "$USER":"$USER" /opt/sprintsmith
+gcloud compute instances describe sprintsmith-backend \
+  --project major-project-512815 \
+  --zone us-central1-a \
+  --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
 ```
 
-Copy `infra/deploy/.env.production.example` to `/opt/sprintsmith/.env` and replace every placeholder. Never commit that file.
-
-The production GitHub Actions workflow can publish images to GHCR. For a
-gcloud-driven GCP deployment, use the script and Cloud Build configuration
-described below; this path publishes to the existing `devpilot-repo`
-Artifact Registry repository and does not require a GitHub Actions SSH key.
-
-The GHCR workflow requires these GitHub repository secrets (or `production`
-environment secrets if that environment is configured for both publishing
-and deployment):
-
-- `BACKEND_HOST`: VM public hostname or IP
-- `BACKEND_USER`: SSH deployment user
-- `BACKEND_SSH_KEY`: private SSH key
-- `GHCR_READ_USER`: GitHub package reader
-- `GHCR_READ_TOKEN`: a read-only token with `read:packages`
-
-The VM does **not** need a Git checkout. The workflow copies
-`infra/deploy/compose.production.yaml` to the VM, authenticates to GHCR, and
-starts the published container images. Therefore, `/opt/sprintsmith` not being
-a Git repository is expected; it should contain `.env` and
-`infra/deploy/compose.production.yaml`.
-
-Set the repository Actions variable `BACKEND_DEPLOY_ENABLED` to `true` only after `BACKEND_HOST`,
-`BACKEND_USER`, and `BACKEND_SSH_KEY` are configured and the VM is prepared.
-The frontend job is skipped unless the repository Actions variable
-`DEPLOY_FRONTEND` is exactly `true`.
+The VM already has Docker Compose and `/opt/sprintsmith/.env`. The VM does
+**not** need a Git checkout. GitHub Actions uses Workload Identity Federation
+to authenticate to GCP without a service-account key, runs Cloud Build, and
+updates the containers over OS Login. No `BACKEND_HOST`, SSH private key, or
+GHCR pull token is needed.
 
 ## Verify a GCE deployment
 
@@ -62,7 +58,7 @@ Check deployment state and the backend from the VM:
 
 ```bash
 gcloud compute ssh sprintsmith-backend --zone=us-central1-a \
-  --command='cd /opt/sprintsmith && docker compose --env-file .env -f infra/deploy/compose.production.yaml ps'
+  --command='cd /opt/sprintsmith && sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml ps'
 
 gcloud compute ssh sprintsmith-backend --zone=us-central1-a \
   --command='curl --fail http://localhost:8002/health'
@@ -76,12 +72,10 @@ not part of this production stack. GCP ingress should allow only ports `80`
 and `443` for the VM's `sprintsmith-backend` network tag (plus the separately
 managed SSH rule).
 
-## GCP-native build and deploy
+## GCP-native manual build and deploy
 
-The VM does not need a Git checkout. From a clean local checkout, with the
-Google Cloud CLI authenticated to the target project and the required
-application settings already configured in `/opt/sprintsmith/.env`, deploy
-the current commit with:
+From a local checkout, with `gcloud` authenticated to the target project,
+deploy the current commit with:
 
 ```bash
 gcloud config set project major-project-512815
@@ -122,10 +116,9 @@ Add separate SprintSmith hostnames:
 - `sprintsmith-api.rajmathuria.me`: A record to the backend VM (`34.9.97.6`)
 - `app.rajmathuria.me`: Cloudflare Worker custom domain
 
-Set `CORS_ORIGINS=https://app.rajmathuria.me` in the VM `.env`. Build the
-frontend with `VITE_API_URL=https://sprintsmith-api.rajmathuria.me`; for the
-GitHub Actions frontend workflow, set the repository variable
-`PUBLIC_API_URL` to that same API URL.
+Set `CORS_ORIGINS=https://app.rajmathuria.me` in the VM `.env`. The GitHub
+Actions frontend workflow builds with
+`VITE_API_URL=https://sprintsmith-api.rajmathuria.me`.
 
 ## Deploy the frontend manually
 
@@ -144,24 +137,92 @@ Settings > Domains & Routes > Add > Custom Domain**, then add
 Verify the API at `https://sprintsmith-api.rajmathuria.me/health` and the
 frontend at `https://app.rajmathuria.me`.
 
-## Deployment pipeline
+## GitHub Actions pipelines
 
-Every push to `main` runs `.github/workflows/deploy.yml`. The GHCR backend
-image publishing and VM deployment happen when the repository Actions
-variable `BACKEND_DEPLOY_ENABLED` is exactly `true`; the frontend job is
-skipped unless `DEPLOY_FRONTEND` is exactly `true`. The GCP-native deployment
-is run explicitly with `bash infra/deploy/deploy-gcp.sh`.
+All five workflows start on every branch push:
 
-1. Build and publish backend-core and AI-engine images to GHCR.
-2. SSH to the VM, pull immutable commit-tagged images, run migrations, and restart the backend stack.
-3. Check `/health` on the deployed backend.
-4. The frontend deploy job is skipped unless `DEPLOY_FRONTEND` is set to `true`.
+1. `CI`: root lint and unit tests.
+2. `Full Stack Platform`: both Compose profiles, stack startup, and smoke test.
+3. `DevPilot Backend Core`: backend unit, repository, migration, and PostgreSQL integration tests.
+4. `DevPilot AI Engine`: offline AI-engine tests.
+5. `Production Deployment`: the workflow starts on each branch push; production
+   deployment jobs run only for `main`.
 
-The workflow is also available through **Actions > Production Deployment > Run workflow**. The first deployment should be approved through the GitHub `production` environment.
+The CI and full-stack workflows intentionally have separate responsibilities:
+CI runs the root lint and unit tests; Full Stack validates Compose, starts the
+stack, and smoke-tests the API. Backend-core and AI-engine tests are separate
+pipelines. There is one production deploy workflow; the old GHCR deploy path
+has been removed to avoid deploying the same backend twice.
+
+The production workflow deploys backend and AI-engine images through Cloud
+Build and Artifact Registry using the repository-restricted GCP Workload
+Identity Federation provider. It does not use GHCR or long-lived GCP keys.
+Backend deployment runs automatically after a push to `main`. The Cloudflare
+frontend job runs after a successful backend deployment only when the
+repository Actions variable `DEPLOY_FRONTEND` is exactly `true`.
+
+### Configure GitHub for frontend deployment
+
+The GCP Workload Identity pool/provider and deployment service account are
+already configured for `CodeCraftsmanRaj/SprintSmith` on `main`; the workflow
+uses the provider and account directly. No GCP JSON key or additional GitHub
+GCP secret is required.
+
+In the repository's **Settings > Secrets and variables > Actions**, add the
+following secrets (repository-level or `production` environment-level):
+
+- `CLOUDFLARE_API_TOKEN`: token with permission to deploy the Worker.
+- `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account identifier.
+
+Then add the repository Actions variable:
+
+- Name: `DEPLOY_FRONTEND`
+- Value: `true`
+
+The frontend job builds with `VITE_API_URL=https://sprintsmith-api.rajmathuria.me`
+and deploys the Worker named `sprintsmith-frontend`. After the first successful
+Worker deployment, add its custom domain in **Cloudflare > Workers & Pages >
+sprintsmith-frontend > Settings > Domains & Routes > Add > Custom Domain**:
+`app.rajmathuria.me`. Do not create a manual A record for the Worker hostname.
+Keep existing `api.rajmathuria.me` unchanged.
+
+### Push and monitor a deployment
+
+Commit and push the changes to the `main` branch to run all five workflows and
+deploy the backend:
+
+```bash
+git status --short
+git add .gcloudignore .github/workflows README.md docs infra/deploy infra/db/init.sql
+git commit -m "Configure GCP deployment pipeline"
+git push origin main
+```
+
+Check **GitHub > CodeCraftsmanRaj/SprintSmith > Actions**. Confirm that the
+five workflow runs started for the push. In `Production Deployment`, wait for
+`Build and deploy backend to GCP` to finish; when `DEPLOY_FRONTEND=true`, the
+Cloudflare Worker deployment follows that job.
+
+Verify the live endpoints:
+
+```bash
+curl --fail https://sprintsmith-api.rajmathuria.me/health
+curl --fail https://sprintsmith-api.rajmathuria.me/health/db
+curl --fail https://sprintsmith-api.rajmathuria.me/health/ai
+```
+
+Open `https://sprintsmith-api.rajmathuria.me/docs` and, after configuring the
+Worker custom domain, `https://app.rajmathuria.me`.
+
+If frontend deployment is not ready yet, leave `DEPLOY_FRONTEND` unset or set
+it to `false`; backend deployment still runs on `main`. To manually retry a
+failed deployment, use **Actions > Production Deployment > Run workflow** on
+`main`. Local build/deploy remains available with
+`bash infra/deploy/deploy-gcp.sh`.
 
 ## Constraints
 
-- No cloud credentials are stored in this repository.
+- No cloud credentials or service-account keys are stored in this repository.
 - The AI-engine image is large and CPU-heavy because it includes Docling and document models.
 - Free hosting is quota-based and may require payment verification.
 - Configure backups, monitoring retention, and model API limits before real user data.

@@ -30,17 +30,17 @@ if [[ "${SKIP_BUILD:-false}" != "true" ]]; then
 		.
 fi
 
-gcloud compute ssh "$VM_NAME" \
+REMOTE_TMP="$(gcloud compute ssh "$VM_NAME" \
 	--project "$PROJECT_ID" \
 	--zone "$ZONE" \
-	--command='mkdir -p /tmp/sprintsmith-deploy'
+	--command='mktemp -d /tmp/sprintsmith-deploy.XXXXXX')"
 
 gcloud compute scp \
 	infra/deploy/compose.production.yaml \
 	infra/deploy/Caddyfile \
 	infra/deploy/prepare-vm-env.py \
 	infra/db/init.sql \
-	"${VM_NAME}:/tmp/sprintsmith-deploy/" \
+	"${VM_NAME}:${REMOTE_TMP}/" \
 	--project "$PROJECT_ID" \
 	--zone "$ZONE"
 
@@ -49,23 +49,24 @@ gcloud compute ssh "$VM_NAME" \
 	--zone "$ZONE" \
 	--command="set -e
 		test -f /opt/sprintsmith/.env
-		mkdir -p /opt/sprintsmith/infra/deploy /opt/sprintsmith/infra/db
-		mv /tmp/sprintsmith-deploy/compose.production.yaml /opt/sprintsmith/infra/deploy/
-		mv /tmp/sprintsmith-deploy/Caddyfile /opt/sprintsmith/infra/deploy/
-		mv /tmp/sprintsmith-deploy/prepare-vm-env.py /opt/sprintsmith/infra/deploy/
-		mv /tmp/sprintsmith-deploy/init.sql /opt/sprintsmith/infra/db/
-		chmod 600 /opt/sprintsmith/.env
-		python3 /opt/sprintsmith/infra/deploy/prepare-vm-env.py
-		sed -i 's#^BACKEND_IMAGE=.*#BACKEND_IMAGE=${REGISTRY}/sprintsmith-backend-core:${TAG}#' /opt/sprintsmith/.env
-		sed -i 's#^AI_ENGINE_IMAGE=.*#AI_ENGINE_IMAGE=${REGISTRY}/sprintsmith-ai-engine:${TAG}#' /opt/sprintsmith/.env
-		gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+		sudo mkdir -p /opt/sprintsmith/infra/deploy /opt/sprintsmith/infra/db
+		sudo mv ${REMOTE_TMP}/compose.production.yaml /opt/sprintsmith/infra/deploy/
+		sudo mv ${REMOTE_TMP}/Caddyfile /opt/sprintsmith/infra/deploy/
+		sudo mv ${REMOTE_TMP}/prepare-vm-env.py /opt/sprintsmith/infra/deploy/
+		sudo mv ${REMOTE_TMP}/init.sql /opt/sprintsmith/infra/db/
+		sudo chmod 600 /opt/sprintsmith/.env
+		sudo python3 /opt/sprintsmith/infra/deploy/prepare-vm-env.py
+		sudo sed -i 's#^BACKEND_IMAGE=.*#BACKEND_IMAGE=${REGISTRY}/sprintsmith-backend-core:${TAG}#' /opt/sprintsmith/.env
+		sudo sed -i 's#^AI_ENGINE_IMAGE=.*#AI_ENGINE_IMAGE=${REGISTRY}/sprintsmith-ai-engine:${TAG}#' /opt/sprintsmith/.env
+		sudo gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
 		cd /opt/sprintsmith
-		docker compose --env-file .env -f infra/deploy/compose.production.yaml pull
-		docker compose --env-file .env -f infra/deploy/compose.production.yaml up -d
+		sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml pull
+		sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml up -d
 		curl --fail --retry 20 --retry-delay 5 http://localhost:8002/health
 		if ! curl --fail --retry 20 --retry-delay 5 https://sprintsmith-api.rajmathuria.me/health; then
 			echo 'Local API is healthy, but public HTTPS failed. Point sprintsmith-api.rajmathuria.me to the VM static IP and verify Cloudflare TLS mode is Full (strict).' >&2
 			exit 1
-		fi"
+		fi
+		rmdir ${REMOTE_TMP}"
 
 printf 'Deployed %s to %s\n' "$TAG" "$VM_NAME"
