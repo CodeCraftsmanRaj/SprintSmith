@@ -122,20 +122,24 @@ Actions frontend workflow builds with
 
 ## Deploy the frontend manually
 
-From `frontend/`, build with the public API URL and deploy the Worker:
+The repo's `frontend/wrangler.jsonc` config attaches
+`app.rajmathuria.me` as a Worker custom domain. From `frontend/`, confirm
+Wrangler is logged into the Cloudflare account that owns the active
+`rajmathuria.me` zone, then build and deploy:
 
 ```bash
+npx wrangler whoami
 npm ci
 VITE_API_URL=https://sprintsmith-api.rajmathuria.me npm run build
-npx wrangler login
+npx wrangler login # only if whoami shows the wrong account or no login
 npx wrangler deploy
 ```
 
-In the Cloudflare dashboard, open **Workers & Pages > sprintsmith-frontend >
-Settings > Domains & Routes > Add > Custom Domain**, then add
-`app.rajmathuria.me`. Leave the existing `api.rajmathuria.me` record untouched.
-Verify the API at `https://sprintsmith-api.rajmathuria.me/health` and the
-frontend at `https://app.rajmathuria.me`.
+Cloudflare creates/updates the Worker's custom-domain DNS and certificate.
+Do not add a manual A record for `app`, and leave the existing
+`api.rajmathuria.me` record untouched. Verify the API at
+`https://sprintsmith-api.rajmathuria.me/health` and the frontend at
+`https://app.rajmathuria.me`.
 
 ## GitHub Actions pipelines
 
@@ -166,7 +170,11 @@ repository Actions variable `DEPLOY_FRONTEND` is exactly `true`.
 The GCP Workload Identity pool/provider and deployment service account are
 already configured for `CodeCraftsmanRaj/SprintSmith` on `main`; the workflow
 uses the provider and account directly. No GCP JSON key or additional GitHub
-GCP secret is required.
+GCP secret is required. The deploy service account has build permissions and
+bucket-scoped `roles/storage.legacyBucketWriter` and
+`roles/storage.objectViewer` access to the Cloud Build staging bucket
+`gs://major-project-512815_cloudbuild`. The writer role permits source upload;
+the viewer role permits reading staged source objects.
 
 In the repository's **Settings > Secrets and variables > Actions**, add the
 following secrets (repository-level or `production` environment-level):
@@ -180,11 +188,16 @@ Then add the repository Actions variable:
 - Value: `true`
 
 The frontend job builds with `VITE_API_URL=https://sprintsmith-api.rajmathuria.me`
-and deploys the Worker named `sprintsmith-frontend`. After the first successful
-Worker deployment, add its custom domain in **Cloudflare > Workers & Pages >
-sprintsmith-frontend > Settings > Domains & Routes > Add > Custom Domain**:
-`app.rajmathuria.me`. Do not create a manual A record for the Worker hostname.
-Keep existing `api.rajmathuria.me` unchanged.
+and deploys the Worker named `sprintsmith-frontend`. The Wrangler config
+attaches `app.rajmathuria.me` as a custom domain and Cloudflare creates the DNS
+record and certificate. The Cloudflare account used by Wrangler must own the
+active `rajmathuria.me` zone. Do not create a manual A record for the Worker
+hostname. Keep existing `api.rajmathuria.me` unchanged.
+
+All pushes, including collaborator pushes to feature branches, run the five
+workflow checks. Production deployment is intentionally restricted to
+`main`: merge or push reviewed changes to `main` to update the live backend
+and, when enabled, frontend. Feature-branch pushes do not replace production.
 
 ### Push and monitor a deployment
 
@@ -202,6 +215,12 @@ Check **GitHub > CodeCraftsmanRaj/SprintSmith > Actions**. Confirm that the
 five workflow runs started for the push. In `Production Deployment`, wait for
 `Build and deploy backend to GCP` to finish; when `DEPLOY_FRONTEND=true`, the
 Cloudflare Worker deployment follows that job.
+
+If a deployment attempt failed before Cloud Build started because the GitHub
+deploy identity could not access the staging bucket, the bucket-scoped
+permission is configured. Rerun **Production Deployment** on `main` from
+**Actions > Production Deployment > Run workflow**; no source changes are
+needed for that IAM fix.
 
 Verify the live endpoints:
 
