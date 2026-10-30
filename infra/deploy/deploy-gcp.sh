@@ -118,6 +118,10 @@ gcloud compute ssh "$VM_NAME" \
 		sudo sed -i 's#^AI_ENGINE_IMAGE=.*#AI_ENGINE_IMAGE=${REGISTRY}/sprintsmith-ai-engine:${TAG}#' /opt/sprintsmith/.env
 		sudo gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
 		cd /opt/sprintsmith
+		# Every deploy uses a unique tag, so old images accumulate and can fill
+		# the VM disk. Remove images not used by the running stack first.
+		sudo docker image prune -af
+		sudo docker builder prune -af >/dev/null 2>&1 || true
 		sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml pull
 		sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml up -d
 		curl --fail --retry 20 --retry-delay 5 http://localhost:8002/health
