@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.domain.models import AuditLog, DocTreeNode, IngestJob, Requirement, User
 from app.services.ai_engine import AIEngineClient
 
-logger = logging.getLogger("devpilot.backend.ingest")
+logger = logging.getLogger("sprintsmith.backend.ingest")
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md", ".csv", ".pptx", ".xlsx", ".html"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB

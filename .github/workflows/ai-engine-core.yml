@@ -1,4 +1,4 @@
-name: DevPilot AI Engine
+name: SprintSmith AI Engine
 
 on:
   push:
@@ -38,7 +38,7 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: devpilot-ai-engine-test-reports
+          name: sprintsmith-ai-engine-test-reports
           path: |
             backend-core/ai-engine/junit-ai.xml
             backend-core/ai-engine/coverage.xml

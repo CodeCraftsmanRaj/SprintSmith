@@ -3,7 +3,7 @@ import re
 
 from langchain_core.exceptions import OutputParserException
 
-logger = logging.getLogger("devpilot.quality")
+logger = logging.getLogger("sprintsmith.quality")
 
 # (?:...)|(?:...) grouping is explicit; [ \t]* (not \s*) keeps the alternation linear —
 # \s* at line boundaries can scan across newlines and backtrack super-linearly (S8786/S5850).

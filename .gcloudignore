@@ -1,4 +1,12 @@
 #!include:.gitignore
 .git/
+# Keep the Cloud Build source upload small; images only need backend-core/.
+frontend/node_modules/
+frontend/.output/
+frontend/.wrangler/
+frontend/dist/
+frontend/.nitro/
+docs/
+*.docx
 *.pem
 *.key

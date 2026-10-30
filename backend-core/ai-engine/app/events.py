@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Callable
 
-logger = logging.getLogger("devpilot.events")
+logger = logging.getLogger("sprintsmith.events")
 
 
 @dataclass

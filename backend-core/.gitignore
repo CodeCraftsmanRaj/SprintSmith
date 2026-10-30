@@ -57,9 +57,9 @@ pnpm-debug.log*
 # ==============================
 # Local databases and generated data
 # ==============================
-backend/devpilot.db
+backend/sprintsmith.db
 backend/var/
-ai-engine/devpilot.db
+ai-engine/sprintsmith.db
 # Offline eval harness output (IMPLEMENTATION.draft.md §4.2 Layer 2)
 ai-engine/eval_data/eval_report*.json
 *.sqlite

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DevPilot local stack launcher — one command to run the whole pipeline.
+# SprintSmith local stack launcher — one command to run the whole pipeline.
 #
 #   tools/run_stack.sh            start db + ai-engine + backend (if not already up),
 #                                 then the Streamlit UI in the foreground.
@@ -14,10 +14,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUNDIR="/tmp/devpilot_stack"
-DB_URL="${DB_URL:-postgresql+psycopg://devpilot:devpilot@localhost:5433/devpilot}"
+RUNDIR="/tmp/sprintsmith_stack"
+COMPOSE_PROJECT="${COMPOSE_PROJECT:-sprintsmith-barclaysmdm}"
+DB_CONTAINER="${DB_CONTAINER:-${COMPOSE_PROJECT}-db-1}"
+DB_URL="${DB_URL:-postgresql+psycopg://sprintsmith:sprintsmith@localhost:5433/sprintsmith}"
 ENGINE_VENV="${ENGINE_VENV:-$ROOT/ai-engine/.venv}"
-UI_VENV="${UI_VENV:-$HOME/.venvs/devpilot-ui}"
+UI_VENV="${UI_VENV:-$HOME/.venvs/sprintsmith-ui}"
 
 mkdir -p "$RUNDIR"
 
@@ -28,12 +30,12 @@ wait_for() { # url, name, max seconds
 }
 
 start_db() {
-  if docker exec devpilot-barclaysmdm-db-1 pg_isready -U devpilot -q 2>/dev/null; then
+  if docker exec "$DB_CONTAINER" pg_isready -U sprintsmith -q 2>/dev/null; then
     echo "  ✓ db (compose) already running"; return 0
   fi
-  echo "  starting compose db..."; (cd "$ROOT" && docker compose up -d db >/dev/null)
+  echo "  starting compose db..."; (cd "$ROOT" && docker compose -p "$COMPOSE_PROJECT" up -d db >/dev/null)
   for _ in $(seq 60); do
-    docker exec devpilot-barclaysmdm-db-1 pg_isready -U devpilot -q 2>/dev/null && { echo "  ✓ db"; return 0; }
+    docker exec "$DB_CONTAINER" pg_isready -U sprintsmith -q 2>/dev/null && { echo "  ✓ db"; return 0; }
     sleep 1
   done
   echo "  ✗ db failed to start"; exit 1
@@ -85,7 +87,7 @@ stop_all() {
 }
 
 status() {
-  printf '  db        : %s\n' "$(docker exec devpilot-barclaysmdm-db-1 pg_isready -U devpilot -q 2>/dev/null && echo up || echo down)"
+  printf '  db        : %s\n' "$(docker exec "$DB_CONTAINER" pg_isready -U sprintsmith -q 2>/dev/null && echo up || echo down)"
   printf '  ai-engine : %s\n' "$(port_up http://localhost:8001/health && echo up || echo down)"
   printf '  backend   : %s\n' "$(port_up http://localhost:8000/health && echo up || echo down)"
   printf '  ui        : %s\n' "$(port_up http://localhost:8501/ && echo up || echo down)"
@@ -96,7 +98,7 @@ case "${1:-}" in
   --status) status; exit 0 ;;
 esac
 
-echo "== DevPilot stack =="
+echo "== SprintSmith stack =="
 echo "[1/4] database";     start_db
 echo "[2/4] schema";       ensure_schema
 echo "[3/4] ai-engine";    start_engine
@@ -107,6 +109,6 @@ echo "Pipeline UI: http://localhost:8501  (Ctrl-C closes UI only; '$0 --stop' st
 
 if [ "${1:-}" != "--no-ui" ]; then
   [ -x "$UI_VENV/bin/streamlit" ] || { echo "  ✗ ui venv missing at $UI_VENV — create it: python3.11 -m venv $UI_VENV && $UI_VENV/bin/pip install -r tools/requirements.txt"; exit 1; }
-  cd "$ROOT" && export DB_URL DEVPILOT_BACKEND_URL="http://localhost:8000"
+  cd "$ROOT" && export DB_URL SPRINTSMITH_BACKEND_URL="http://localhost:8000"
   exec "$UI_VENV/bin/streamlit" run tools/streamlit_app.py --server.headless true
 fi

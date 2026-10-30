@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from app.ingestion import pipeline
 from app.retrieval import vectorstore
 
-logger = logging.getLogger("devpilot.ai_engine")
+logger = logging.getLogger("sprintsmith.ai_engine")
 
 router = APIRouter(tags=["Ingest"])
 

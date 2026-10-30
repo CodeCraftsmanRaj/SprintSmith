@@ -31,7 +31,7 @@ from app.llm.provider import get_llm
 from app.pipeline.chain import build_generation_chain, retrieve_context
 from app.pipeline.quality_check import _strip_code_fences, format_compliance_score
 
-logger = logging.getLogger("devpilot.sop")
+logger = logging.getLogger("sprintsmith.sop")
 
 MAX_RETRIES = 2
 APPROVAL_THRESHOLD = 0.80

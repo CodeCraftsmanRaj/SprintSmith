@@ -81,3 +81,12 @@ def test_evaluation_validation(client):
     project = client.post("/api/v1/projects", json={"name": "Payments"}, headers=headers).json()
     assert client.post("/api/v1/artifacts/missing/evaluations", json={"score": 5}, headers=headers).status_code == 404
     assert client.post("/api/v1/projects/missing/generate", json={"artifact_type": "user_story", "requirement_text": "valid"}, headers=headers).status_code == 404
+
+
+def test_metrics_endpoint_exposes_prometheus_format(client):
+    client.get("/health")
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    assert "text/plain" in response.headers["content-type"]
+    assert "sprintsmith_http_requests_total" in response.text
+    assert "sprintsmith_http_request_duration_seconds" in response.text

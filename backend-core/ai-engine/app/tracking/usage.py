@@ -4,7 +4,7 @@ from datetime import date
 
 from app.config import settings
 
-logger = logging.getLogger("devpilot.ai_engine.usage")
+logger = logging.getLogger("sprintsmith.ai_engine.usage")
 
 _lock = threading.Lock()
 _state = {"day": date.today(), "count": 0}

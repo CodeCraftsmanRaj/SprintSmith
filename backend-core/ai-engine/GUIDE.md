@@ -1,4 +1,4 @@
-# DevPilot AI Engine — Integration & Developer Guide
+# SprintSmith AI Engine — Integration & Developer Guide
 
 **Service:** `ai-engine` (Person 3: GenAI + RAG + Prompt Engineering)  
 **Port:** `8001` (HTTP REST API)  
@@ -35,8 +35,8 @@ uvicorn app.main:app --reload --port 8001
 
 ### Run with Docker (For Person 6 / Deployment)
 ```bash
-docker build -t devpilot-ai-engine .
-docker run -p 8001:8001 --env-file .env devpilot-ai-engine
+docker build -t sprintsmith-ai-engine .
+docker run -p 8001:8001 --env-file .env sprintsmith-ai-engine
 ```
 
 ### Run the whole local stack (recommended)
@@ -75,7 +75,7 @@ RETRIEVAL_MODE=vector        # vector | hybrid (flip only after §2.3.6 ship run
 # Service Config
 AI_ENGINE_PORT=8001
 LOG_LEVEL=INFO
-COLLECTION_NAME=devpilot_requirements
+COLLECTION_NAME=sprintsmith_requirements
 ```
 
 ---
@@ -243,7 +243,7 @@ COLLECTION_NAME=devpilot_requirements
 ### 📊 Person 5 (Evaluation + AI Assistant + Case Study)
 1. **Evaluation Metrics:** Use `app/pipeline/quality_check.py` functions (`format_compliance_score()`, `consistency_score()`) for prompt benchmark evaluations.
 2. **Telemetry:** Use `prompt_version` and `usage` data from the response to measure token cost and latency trade-offs between prompt iterations.
-3. **Conversational Assistant (UC-14):** Query the vector store collection (`devpilot_requirements`) filtered by `project_id` to retrieve context for user questions.
+3. **Conversational Assistant (UC-14):** Query the vector store collection (`sprintsmith_requirements`) filtered by `project_id` to retrieve context for user questions.
 
 ### 🔐 Person 6 (Testing + Security + DevOps)
 1. **CI Tests:** `.github/workflows/ai-engine-tests.yml` runs the offline suite on every push/PR — no secrets needed (key validation never executes at import; LLM/retrieval are fake-patched). From `ai-engine/`, install development dependencies first (`pip install -r requirements-dev.txt`), then:

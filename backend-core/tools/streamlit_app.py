@@ -1,5 +1,5 @@
 """
-Minimal Streamlit UI for the DevPilot pipeline — a dev tool, NOT a product frontend.
+Minimal Streamlit UI for the SprintSmith pipeline — a dev tool, NOT a product frontend.
 
 Zero-config by design: connection details come from the same env the stack launcher
 exports (DB_URL, backend port 8000), and a fixed dev identity is auto-logged-in.
@@ -8,7 +8,7 @@ Override anything from the sidebar "Advanced" panel if your setup differs.
 Prereqs: tools/run_stack.sh (starts db + ai-engine + backend, then this UI).
 
 Run standalone (services already up):
-    /home/devanssh/.venvs/devpilot-ui/bin/streamlit run tools/streamlit_app.py
+    /home/devanssh/.venvs/sprintsmith-ui/bin/streamlit run tools/streamlit_app.py
 """
 import os
 import time
@@ -17,14 +17,14 @@ import pandas as pd
 import requests
 import streamlit as st
 
-DEFAULT_BACKEND = os.environ.get("DEVPILOT_BACKEND_URL", "http://localhost:8000")
-DEFAULT_DB = os.environ.get("DB_URL", "postgresql+psycopg://devpilot:devpilot@localhost:5433/devpilot")
-DEV_EMAIL = os.environ.get("DEVPILOT_UI_EMAIL", "ui@example.com")
-DEV_PASSWORD = os.environ.get("DEVPILOT_UI_PASSWORD", "Str0ng-pass-123")
+DEFAULT_BACKEND = os.environ.get("SPRINTSMITH_BACKEND_URL", "http://localhost:8000")
+DEFAULT_DB = os.environ.get("DB_URL", "postgresql+psycopg://sprintsmith:sprintsmith@localhost:5433/sprintsmith")
+DEV_EMAIL = os.environ.get("SPRINTSMITH_UI_EMAIL", "ui@example.com")
+DEV_PASSWORD = os.environ.get("SPRINTSMITH_UI_PASSWORD", "Str0ng-pass-123")
 ARTIFACT_TYPES = ["user_story", "acceptance_criteria", "test_case",
                   "api_spec", "architecture", "sprint_plan"]
 
-st.set_page_config(page_title="DevPilot pipeline", layout="wide")
+st.set_page_config(page_title="SprintSmith pipeline", layout="wide")
 
 backend = st.session_state.get("backend", DEFAULT_BACKEND)
 db_url = st.session_state.get("db_url", DEFAULT_DB)
@@ -76,7 +76,7 @@ if "token" not in st.session_state:
 
 # ── sidebar: status + advanced overrides ──────────────────────────────────────
 with st.sidebar:
-    st.subheader("DevPilot pipeline")
+    st.subheader("SprintSmith pipeline")
     if "token" in st.session_state:
         st.success(f"Signed in as {email}")
     else:

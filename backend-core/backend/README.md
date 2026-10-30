@@ -1,4 +1,4 @@
-# DevPilot backend
+# SprintSmith backend
 
 FastAPI service for users, project access, requirement uploads, generated artifacts, history, evaluation, exports and audit records. The AI engine remains a separate service.
 
@@ -27,11 +27,11 @@ It performs the following steps:
 4. starts the backend on `:8000` from `backend/.venv` against the **local compose database** (it overrides the Neon URL in `backend/.env`),
 5. starts the Streamlit UI on `:8501` unless `--no-ui` is passed.
 
-Prerequisites: Docker running; `backend/.venv` and `ai-engine/.venv` installed (`pip install -r requirements.txt`); `backend/.env` and `ai-engine/.env` filled in; and the UI venv `~/.venvs/devpilot-ui` created with `pip install -r tools/requirements.txt`. Override defaults with `DB_URL`, `ENGINE_VENV` and `UI_VENV`. Logs are written to `/tmp/devpilot_stack/`.
+Prerequisites: Docker running; `backend/.venv` and `ai-engine/.venv` installed (`pip install -r requirements.txt`); `backend/.env` and `ai-engine/.env` filled in; and the UI venv `~/.venvs/sprintsmith-ui` created with `pip install -r tools/requirements.txt`. Override defaults with `DB_URL`, `ENGINE_VENV` and `UI_VENV`. Logs are written to `/tmp/sprintsmith_stack/`.
 
 ## Environment
 
-`DATABASE_URL` (e.g. `postgresql+psycopg://user:password@localhost:5432/devpilot`), `JWT_SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `AI_ENGINE_URL` (default `http://localhost:8001`), `UPLOAD_DIR`, `CORS_ORIGINS` (comma separated), `AUTO_CREATE_TABLES`, and `LOG_LEVEL`. The AI engine separately needs its own keys and vector database configuration; consult its GUIDE.
+`DATABASE_URL` (e.g. `postgresql+psycopg://user:password@localhost:5432/sprintsmith`), `JWT_SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `AI_ENGINE_URL` (default `http://localhost:8001`), `UPLOAD_DIR`, `CORS_ORIGINS` (comma separated), `AUTO_CREATE_TABLES`, and `LOG_LEVEL`. The AI engine separately needs its own keys and vector database configuration; consult its GUIDE.
 
 ## AI engine integration
 

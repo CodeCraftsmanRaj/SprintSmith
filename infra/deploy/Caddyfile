@@ -2,3 +2,9 @@ sprintsmith-api.rajmathuria.me {
 	encode zstd gzip
 	reverse_proxy backend-core:8000
 }
+
+grafana.rajmathuria.me {
+	encode zstd gzip
+	# Grafana is a web UI: keep WebSocket upgrades working for live dashboards.
+	reverse_proxy grafana:3000
+}

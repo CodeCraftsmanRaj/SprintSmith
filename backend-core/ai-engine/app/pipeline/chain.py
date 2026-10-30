@@ -12,7 +12,7 @@ from app.retrieval.hybrid import RetrievalResult, hybrid_retrieve
 from app.retrieval.reranker import with_reranking
 from app.retrieval.retriever import get_retriever
 
-logger = logging.getLogger("devpilot.chain")
+logger = logging.getLogger("sprintsmith.chain")
 
 NO_CONTEXT = "(no matching context retrieved for this project)"
 

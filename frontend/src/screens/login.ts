@@ -19,7 +19,7 @@ document.querySelectorAll('[data-auth-tab]').forEach(function (t) {
 export const html = `
 <div class="min-h-screen grid grid-cols-1 lg:grid-cols-2">
   <div class="hidden lg:flex flex-col justify-between p-margin-desktop bg-surface-container-low border-r border-outline-variant/30">
-    <div class="flex items-center gap-space-xs"><div class="w-6 h-6 rounded bg-primary-container flex items-center justify-center"><span class="material-symbols-outlined text-[16px] text-on-primary-container">terminal</span></div><span class="font-headline-md text-headline-md font-semibold">DevPilot</span></div>
+    <div class="flex items-center gap-space-xs"><div class="w-6 h-6 rounded bg-primary-container flex items-center justify-center"><span class="material-symbols-outlined text-[16px] text-on-primary-container">terminal</span></div><span class="font-headline-md text-headline-md font-semibold">SprintSmith</span></div>
     <div class="flex flex-col gap-space-lg max-w-md">
       <h1 class="font-headline-xl text-headline-xl text-on-surface">Requirements in. Engineering artifacts out.</h1>
       <p class="font-body-lg text-body-lg text-on-surface-variant">AI-powered SDLC co-pilot that turns business requirements into user stories, Gherkin, OpenAPI specs, tests and sprint plans — fully traceable.</p>

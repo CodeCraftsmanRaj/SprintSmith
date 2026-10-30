@@ -5,7 +5,7 @@
 - Frontend: Cloudflare Workers deployment from `frontend/`.
 - Backend: Google Compute Engine VM `sprintsmith-backend` in `us-central1-a`.
 - Database: PostgreSQL/pgvector in the private Docker Compose network on the VM.
-- Registry: Google Artifact Registry repository `devpilot-repo` in `us-central1`.
+- Registry: Google Artifact Registry repository `sprintsmith-repo` in `us-central1`.
 - DNS/TLS: Cloudflare DNS and proxy.
 
 Cloudflare cannot host the Dockerized PostgreSQL, worker, and AI-engine stack directly. The backend VM is required. Free-tier availability, billing verification, storage, and resource limits can change, so confirm them in the provider account before production use.
@@ -17,16 +17,44 @@ Cloudflare cannot host the Dockerized PostgreSQL, worker, and AI-engine stack di
 - Reserved external IP: `34.9.97.6`
 - API: `https://sprintsmith-api.rajmathuria.me`
 - Frontend hostname: `app.rajmathuria.me`
+- Grafana hostname: `grafana.rajmathuria.me` (after the DNS record is added)
 - Existing `api.rajmathuria.me` and `portfolio.rajmathuria.me` are separate
   hostnames and must not be changed for this deployment.
-- The Compose services are `backend-core`, `ai-engine`, `db`, and `caddy`.
-  The backend binds to loopback port `8002`; only Caddy's ports 80/443 are
-  public. The AI engine and database are private.
+- The Compose services are `backend-core`, `ai-engine`, `db`, `caddy`,
+  `prometheus`, and `grafana`. The backend binds to loopback port `8002`; only
+  Caddy's ports 80/443 are public. The AI engine, database, Prometheus, and
+  Grafana are private to the Compose network.
 
 The backend and AI engine have been deployed. The API's `/health`, `/health/db`,
 `/health/ai`, and `/docs` have returned HTTP 200 on the VM, and the public API
 health endpoint has been verified over HTTPS. Provider keys are stored in the
 VM's `/opt/sprintsmith/.env`; never print or commit that file.
+
+## One-time GCP IAM bootstrap
+
+The GitHub deploy service account must be allowed to submit Cloud Build jobs,
+write the source archive to the Cloud Build staging bucket, push images to
+Artifact Registry, and let the VM pull those images. A project owner runs this
+once from a checkout:
+
+```bash
+GOOGLE_CLOUD_PROJECT=major-project-512815 bash infra/deploy/gcp-bootstrap.sh
+```
+
+The script is idempotent. It enables the required APIs, creates
+`sprintsmith-repo`, creates `gs://major-project-512815_cloudbuild` if needed,
+and grants the deploy, Cloud Build, and VM service accounts the required
+roles. It does not touch application secrets.
+
+If the production workflow fails with:
+
+```text
+The user is forbidden from accessing the bucket [major-project-512815_cloudbuild]
+```
+
+re-run the bootstrap script. The missing permission is almost always
+`roles/serviceusage.serviceUsageConsumer`, `roles/cloudbuild.builds.editor`,
+or object access on the staging bucket.
 
 ## One-time backend VM setup
 
@@ -114,6 +142,7 @@ Keep existing `api.rajmathuria.me` and `portfolio.rajmathuria.me` unchanged.
 Add separate SprintSmith hostnames:
 
 - `sprintsmith-api.rajmathuria.me`: A record to the backend VM (`34.9.97.6`)
+- `grafana.rajmathuria.me`: A record to the backend VM (`34.9.97.6`)
 - `app.rajmathuria.me`: Cloudflare Worker custom domain
 
 Set `CORS_ORIGINS=https://app.rajmathuria.me` in the VM `.env`. The GitHub
@@ -141,16 +170,49 @@ Do not add a manual A record for `app`, and leave the existing
 `https://sprintsmith-api.rajmathuria.me/health` and the frontend at
 `https://app.rajmathuria.me`.
 
+## Monitoring
+
+The production Compose stack runs Prometheus and Grafana next to the backend:
+
+- Backend: `/metrics` on the private backend port (Prometheus exposition).
+- Prometheus: internal `prometheus:9090`, scraping `backend-core:8000/metrics`.
+- Grafana: `https://grafana.rajmathuria.me`, dashboard `SprintSmith API`.
+
+Before the first deploy, in Cloudflare DNS create:
+
+- Type `A`, name `grafana`, content `34.9.97.6`, proxy status **DNS only** first.
+
+Caddy obtains the origin certificate automatically; after
+`https://grafana.rajmathuria.me/api/health` works you can enable the Cloudflare
+proxy (SSL/TLS mode **Full (strict)**).
+
+The Grafana admin credentials come from the VM `.env`:
+
+- `GRAFANA_ADMIN_USER` (default `admin`)
+- `GRAFANA_ADMIN_PASSWORD`
+
+If the password is missing, `infra/deploy/prepare-vm-env.py` generates a random
+one and stores it in `/opt/sprintsmith/.env`. Read it from the VM:
+
+```bash
+gcloud compute ssh sprintsmith-backend --zone=us-central1-a \
+  --command='sudo grep -E "^GRAFANA_ADMIN_(USER|PASSWORD)=" /opt/sprintsmith/.env'
+```
+
+Anonymous access is disabled in production. Keep Prometheus private; query it
+through Grafana instead of exposing port 9090 publicly.
+
 ## GitHub Actions pipelines
 
-All five workflows start on every branch push:
+Four workflows start on every push, and the production workflow starts on
+`main` pushes and manual dispatches:
 
 1. `CI`: root lint and unit tests.
 2. `Full Stack Platform`: both Compose profiles, stack startup, and smoke test.
-3. `DevPilot Backend Core`: backend unit, repository, migration, and PostgreSQL integration tests.
-4. `DevPilot AI Engine`: offline AI-engine tests.
-5. `Production Deployment`: the workflow starts on each branch push; production
-   deployment jobs run only for `main`.
+3. `SprintSmith Backend Core`: backend unit, repository, migration, and PostgreSQL integration tests.
+4. `SprintSmith AI Engine`: offline AI-engine tests.
+5. `Production Deployment`: triggered on pushes to `main` and by manual
+   dispatch; the two deployment jobs run only for `main`.
 
 The CI and full-stack workflows intentionally have separate responsibilities:
 CI runs the root lint and unit tests; Full Stack validates Compose, starts the
@@ -161,8 +223,9 @@ has been removed to avoid deploying the same backend twice.
 The production workflow deploys backend and AI-engine images through Cloud
 Build and Artifact Registry using the repository-restricted GCP Workload
 Identity Federation provider. It does not use GHCR or long-lived GCP keys.
-Backend deployment runs automatically after a push to `main`. The Cloudflare
-frontend job runs after a successful backend deployment only when the
+Backend deployment runs automatically after a push to `main`. The frontend and
+backend jobs are independent: the Cloudflare Worker job still runs when the
+backend job fails (unless the workflow is cancelled). It runs only when the
 repository Actions variable `DEPLOY_FRONTEND` is exactly `true`.
 
 ### Configure GitHub for frontend deployment
@@ -179,13 +242,22 @@ the viewer role permits reading staged source objects.
 In the repository's **Settings > Secrets and variables > Actions**, add the
 following secrets (repository-level or `production` environment-level):
 
-- `CLOUDFLARE_API_TOKEN`: token with permission to deploy the Worker.
+- `CLOUDFLARE_API_TOKEN`: a Cloudflare API token with **Account > Workers
+  Scripts > Edit** (and **Account > Account Settings > Read**). The token must
+  be allowed to edit the `sprintsmith-frontend` Worker; a token scoped to a
+  different Worker or account will fail with `No access to the specified
+  service`. Create it at **Cloudflare Dashboard > My Profile > API Tokens >
+  Create Token > Edit Cloudflare Workers**.
 - `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account identifier.
 
 Then add the repository Actions variable:
 
 - Name: `DEPLOY_FRONTEND`
 - Value: `true`
+
+The `CLOUDFLARE_ACCOUNT_ID` secret and `DEPLOY_FRONTEND=true` variable are
+already configured for this repository. Only the API token still needs to be
+added.
 
 The frontend job builds with `VITE_API_URL=https://sprintsmith-api.rajmathuria.me`
 and deploys the Worker named `sprintsmith-frontend`. The Wrangler config
@@ -199,45 +271,59 @@ workflow checks. Production deployment is intentionally restricted to
 `main`: merge or push reviewed changes to `main` to update the live backend
 and, when enabled, frontend. Feature-branch pushes do not replace production.
 
-### Push and monitor a deployment
+### Runbook: from a broken pipeline to a green deploy
 
-Commit and push the changes to the `main` branch to run all five workflows and
-deploy the backend:
+1. **GCP IAM (run once, needs the GCP project owner).**
 
-```bash
-git status --short
-git add .gcloudignore .github/workflows README.md docs infra/deploy infra/db/init.sql
-git commit -m "Configure GCP deployment pipeline"
-git push origin main
-```
+   ```bash
+   GOOGLE_CLOUD_PROJECT=major-project-512815 bash infra/deploy/gcp-bootstrap.sh
+   ```
 
-Check **GitHub > CodeCraftsmanRaj/SprintSmith > Actions**. Confirm that the
-five workflow runs started for the push. In `Production Deployment`, wait for
-`Build and deploy backend to GCP` to finish; when `DEPLOY_FRONTEND=true`, the
-Cloudflare Worker deployment follows that job.
+   Without this, the backend job fails with the Cloud Build staging-bucket
+   permission error.
 
-If a deployment attempt failed before Cloud Build started because the GitHub
-deploy identity could not access the staging bucket, the bucket-scoped
-permission is configured. Rerun **Production Deployment** on `main` from
-**Actions > Production Deployment > Run workflow**; no source changes are
-needed for that IAM fix.
+2. **Cloudflare API token (run once, needs the Cloudflare account owner).**
+   Create a token with **Account > Workers Scripts > Edit** at
+   **My Profile > API Tokens**, then add it as the repository secret
+   `CLOUDFLARE_API_TOKEN`. `CLOUDFLARE_ACCOUNT_ID` and `DEPLOY_FRONTEND=true`
+   are already set.
 
-Verify the live endpoints:
+3. **Optional DNS for Grafana.** Add an `A` record `grafana` -> `34.9.97.6`
+   in Cloudflare. The backend deploys without it; only the Grafana URL stays
+   unreachable until the record exists.
 
-```bash
-curl --fail https://sprintsmith-api.rajmathuria.me/health
-curl --fail https://sprintsmith-api.rajmathuria.me/health/db
-curl --fail https://sprintsmith-api.rajmathuria.me/health/ai
-```
+4. **Push or dispatch.** Commit and push to `main`, or use
+   **Actions > Production Deployment > Run workflow**:
 
-Open `https://sprintsmith-api.rajmathuria.me/docs` and, after configuring the
-Worker custom domain, `https://app.rajmathuria.me`.
+   ```bash
+   git status --short
+   git add .gcloudignore .github/workflows README.md docs infra/deploy infra/observability infra/db/init.sql
+   git commit -m "Fix production pipeline and rename to SprintSmith"
+   git push origin main
+   ```
 
-If frontend deployment is not ready yet, leave `DEPLOY_FRONTEND` unset or set
-it to `false`; backend deployment still runs on `main`. To manually retry a
-failed deployment, use **Actions > Production Deployment > Run workflow** on
-`main`. Local build/deploy remains available with
-`bash infra/deploy/deploy-gcp.sh`.
+5. **Monitor.** In **Actions**, the `Production Deployment` run has two jobs:
+   `Build and deploy backend to GCP` (Cloud Build + VM rollout) and
+   `Deploy frontend to Cloudflare Workers`. They are independent, so a
+   backend failure no longer skips the frontend job.
+
+6. **Verify the live endpoints:**
+
+   ```bash
+   curl --fail https://sprintsmith-api.rajmathuria.me/health
+   curl --fail https://sprintsmith-api.rajmathuria.me/health/db
+   curl --fail https://sprintsmith-api.rajmathuria.me/health/ai
+   curl --fail https://grafana.rajmathuria.me/api/health
+   ```
+
+   Open `https://sprintsmith-api.rajmathuria.me/docs`, `https://app.rajmathuria.me`,
+   and `https://grafana.rajmathuria.me` (login with the `GRAFANA_ADMIN_USER`
+   and `GRAFANA_ADMIN_PASSWORD` from `/opt/sprintsmith/.env`).
+
+If frontend deployment is not ready yet, set `DEPLOY_FRONTEND` to `false`;
+backend deployment still runs on `main`. To manually retry a failed deployment,
+use **Actions > Production Deployment > Run workflow** on `main`. Local
+build/deploy remains available with `bash infra/deploy/deploy-gcp.sh`.
 
 ## Constraints
 

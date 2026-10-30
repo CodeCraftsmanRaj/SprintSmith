@@ -23,7 +23,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 
-logger = logging.getLogger("devpilot.tree_search")
+logger = logging.getLogger("sprintsmith.tree_search")
 
 MAX_SELECTED = 6
 _CACHE_MAX = 256

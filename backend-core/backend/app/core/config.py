@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # ── Database ────────────────────────────────────────────────────────────
-    database_url: str = "sqlite:///./devpilot.db"
+    database_url: str = "sqlite:///./sprintsmith.db"
 
     # ── Authentication ──────────────────────────────────────────────────────
     jwt_secret_key: str = "development-only-change-me"

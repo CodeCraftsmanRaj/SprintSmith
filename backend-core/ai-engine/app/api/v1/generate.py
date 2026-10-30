@@ -17,7 +17,7 @@ from app.pipeline import sop_graph
 from app.schemas.registry import SCHEMA_REGISTRY, get_schema
 from app.tracking.usage import record_request
 
-logger = logging.getLogger("devpilot.ai_engine")
+logger = logging.getLogger("sprintsmith.ai_engine")
 
 router = APIRouter(tags=["Generate"])
 

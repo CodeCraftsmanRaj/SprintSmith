@@ -1,4 +1,4 @@
-# DevPilot frontend
+# SprintSmith frontend
 
 The frontend is a TanStack Start and React project. It connects to the backend gateway and uses its authentication, project, requirement ingestion, and artifact generation APIs.
 

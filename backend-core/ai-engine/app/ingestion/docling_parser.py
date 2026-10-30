@@ -16,7 +16,7 @@ from functools import lru_cache
 
 from app.retrieval.tree_index import Block
 
-logger = logging.getLogger("devpilot.docling")
+logger = logging.getLogger("sprintsmith.docling")
 
 SUPPORTED_DOCLING_EXTENSIONS = {"pdf", "docx"}
 

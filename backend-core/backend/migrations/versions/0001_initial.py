@@ -1,4 +1,4 @@
-"""Create DevPilot application tables."""
+"""Create SprintSmith application tables."""
 from alembic import op
 from app.database import Base
 from app.domain import models  # noqa: F401

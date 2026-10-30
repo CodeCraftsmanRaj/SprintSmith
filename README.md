@@ -84,8 +84,8 @@ for later work and is not included yet.
 - Non-root API and worker Docker images
 - GitHub Actions workflow for dependency installation, Ruff, pytest, and Compose validation
 - Reproducible Python dependency lockfile through `uv.lock`
-- Integrated DevPilot backend gateway with auth, projects, requirements, artifacts, generation, evaluation, exports, audit, and traceability APIs
-- Integrated DevPilot AI engine with async ingestion, hybrid/vector retrieval, generation, streaming, comparison, prompts, and offline evaluation
+- Integrated SprintSmith backend gateway with auth, projects, requirements, artifacts, generation, evaluation, exports, audit, and traceability APIs
+- Integrated SprintSmith AI engine with async ingestion, hybrid/vector retrieval, generation, streaming, comparison, prompts, and offline evaluation
 
 The supplied DOCX and ZIP are reference material only. They are not imported
 as runtime dependencies. Do not commit extracted contents, secrets, raw
@@ -105,7 +105,7 @@ Open these addresses in a browser while the stack is running:
 | Prometheus targets | [localhost:9090/targets](http://localhost:9090/targets) | Confirm scrape status is `UP` |
 | Grafana | [localhost:3000](http://localhost:3000) | Local dashboards, anonymous viewer access |
 | Grafana dashboard | [SprintSmith API dashboard](http://localhost:3000/d/sprintsmith-api/sprintsmith-api) | Request rate, p95 latency, response status |
-| Integrated backend docs | [localhost:8002/docs](http://localhost:8002/docs) | Frontend-facing DevPilot OpenAPI UI when the `core` profile is running |
+| Integrated backend docs | [localhost:8002/docs](http://localhost:8002/docs) | Frontend-facing SprintSmith OpenAPI UI when the `core` profile is running |
 | AI engine docs | [localhost:8001/docs](http://localhost:8001/docs) | Internal RAG/generation API when the `core` profile is running |
 
 Grafana is configured for local viewing only. It has anonymous viewer access
@@ -179,6 +179,21 @@ frontend hostname as a Cloudflare Worker custom domain. Cloudflare provides
 DNS/proxy while Caddy on the VM terminates HTTPS and renews the origin
 certificate. The database and AI engine are not exposed publicly.
 
+Production URLs:
+
+| Component | URL |
+| --- | --- |
+| Backend API | https://sprintsmith-api.rajmathuria.me |
+| API documentation | https://sprintsmith-api.rajmathuria.me/docs |
+| Frontend | https://app.rajmathuria.me |
+| Grafana | https://grafana.rajmathuria.me |
+
+Monitoring is part of the production Compose stack: Prometheus scrapes the
+backend's `/metrics` endpoint on the private network, and Grafana is exposed
+through Caddy at `grafana.rajmathuria.me` with login enabled. See
+[docs/deployment.md](docs/deployment.md) for the DNS record and the admin
+password location.
+
 Deploy from an authenticated Google Cloud CLI session with:
 
 ```bash
@@ -189,10 +204,12 @@ Application secrets remain in `/opt/sprintsmith/.env` on the VM and are never
 uploaded with the Cloud Build source. No credentials belong in this repository.
 
 The complete deployment runbook is in [docs/deployment.md](docs/deployment.md).
-The five GitHub Actions workflows all start on every push. The production
-workflow runs deployment jobs only on `main`, uses GitHub OIDC
-Workload Identity Federation to build and deploy through GCP, and deploys the
-frontend after the backend when `DEPLOY_FRONTEND=true`.
+The CI, Full Stack, backend-core, and AI-engine workflows start on every push;
+the production workflow starts on pushes to `main` and on manual dispatch. It
+uses GitHub OIDC Workload Identity Federation to build and deploy through GCP,
+deploys the backend, and deploys the Cloudflare frontend when
+`DEPLOY_FRONTEND=true`. The first run requires the one-time
+`bash infra/deploy/gcp-bootstrap.sh` IAM setup.
 
 ## Local checks
 
@@ -216,8 +233,8 @@ suites separately.
 The root workflows also run the integrated backend-core suites when their
 paths change:
 
-- `DevPilot Backend Core`: backend tests, coverage, Alembic migration, and PostgreSQL integration tests
-- `DevPilot AI Engine`: keyless offline AI-engine tests with dependency/model caching
+- `SprintSmith Backend Core`: backend tests, coverage, Alembic migration, and PostgreSQL integration tests
+- `SprintSmith AI Engine`: keyless offline AI-engine tests with dependency/model caching
 
 ## Local services
 

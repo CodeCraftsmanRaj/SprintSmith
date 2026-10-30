@@ -78,6 +78,6 @@ def test_prompt(artifact_type: str, payload: PromptTestRequest):
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
-        logger = __import__("logging").getLogger("devpilot.ai_engine")
+        logger = __import__("logging").getLogger("sprintsmith.ai_engine")
         logger.exception("Prompt test failed")
         raise HTTPException(status_code=502, detail="Prompt test generation failed") from exc

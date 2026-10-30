@@ -2,11 +2,15 @@ name: Production Deployment
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
 
 jobs:
   deploy-backend:
@@ -33,10 +37,17 @@ jobs:
 
   deploy-frontend:
     name: Deploy frontend to Cloudflare Workers
-    if: github.ref == 'refs/heads/main' && vars.DEPLOY_FRONTEND == 'true'
+    # Frontend and backend are independent deployments. Run the frontend even
+    # when the backend job fails, but not when the whole workflow is cancelled.
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && vars.DEPLOY_FRONTEND == 'true' }}
     needs: deploy-backend
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VITE_API_URL: ${{ vars.API_URL || 'https://sprintsmith-api.rajmathuria.me' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,17 +55,24 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Validate Cloudflare credentials
+        run: |
+          status=0
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is not set. Add it under Settings > Secrets and variables > Actions."
+            status=1
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID}" ]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID is not set. Add it under Settings > Secrets and variables > Actions."
+            status=1
+          fi
+          exit "$status"
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
       - name: Build frontend
         working-directory: frontend
-        env:
-          VITE_API_URL: https://sprintsmith-api.rajmathuria.me
         run: npm run build
       - name: Deploy Cloudflare Worker
         working-directory: frontend
-        run: npx wrangler@latest deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy

@@ -7,7 +7,7 @@ from langchain_core.documents import Document
 
 from app.config import settings
 
-logger = logging.getLogger("devpilot.ingestion")
+logger = logging.getLogger("sprintsmith.ingestion")
 
 SUPPORTED_EXTENSIONS = {
     ".pdf", ".docx", ".doc", ".txt", ".md", ".csv", ".pptx", ".xlsx", ".html",

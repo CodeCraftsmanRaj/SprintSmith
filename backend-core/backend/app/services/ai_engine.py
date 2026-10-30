@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from app.core.config import settings
 from app.ports.ai_engine_port import AIEnginePort
 
-logger = logging.getLogger("devpilot.backend.ai_client")
+logger = logging.getLogger("sprintsmith.backend.ai_client")
 
 
 class AIEngineClient(AIEnginePort):

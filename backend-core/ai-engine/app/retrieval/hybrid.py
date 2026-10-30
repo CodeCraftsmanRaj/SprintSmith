@@ -24,7 +24,7 @@ from langchain_core.documents import Document
 
 from app.retrieval.tree_search import TreeSkipped
 
-logger = logging.getLogger("devpilot.hybrid")
+logger = logging.getLogger("sprintsmith.hybrid")
 
 RRF_K = 60
 NO_CONTEXT = "(no matching context retrieved for this project)"

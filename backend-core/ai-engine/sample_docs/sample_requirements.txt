@@ -1,4 +1,4 @@
-# DevPilot Sample Project — Software Requirements Specification
+# SprintSmith Sample Project — Software Requirements Specification
 
 ## 1. Authentication & Account Management
 

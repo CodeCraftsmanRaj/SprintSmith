@@ -1,5 +1,5 @@
 """
-Run any PDF through the full DevPilot pipeline: backend upload (202) -> engine ingest
+Run any PDF through the full SprintSmith pipeline: backend upload (202) -> engine ingest
 job (Docling parse + embeddings) -> poll until terminal -> optional SOP generation.
 
 The backend and ai-engine must be running (see the steps in the repo README/GUIDE),

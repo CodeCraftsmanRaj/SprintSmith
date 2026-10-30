@@ -6,6 +6,8 @@ from threading import Lock
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from starlette.responses import Response
 
 from app.config import settings
 from app.database import Base, engine
@@ -19,9 +21,20 @@ from app.api.v1.prompts import router as prompts_router
 from app.api.v1.requirements import router as requirements_router
 
 logging.basicConfig(level=settings.log_level.upper())
-logger = logging.getLogger("devpilot.backend")
+logger = logging.getLogger("sprintsmith.backend")
 
-app = FastAPI(title="DevPilot Backend API", version="1.0.0")
+HTTP_REQUESTS = Counter(
+    "sprintsmith_http_requests_total",
+    "Total HTTP requests handled by the API.",
+    ["method", "path", "status"],
+)
+HTTP_LATENCY = Histogram(
+    "sprintsmith_http_request_duration_seconds",
+    "HTTP request duration in seconds.",
+    ["method", "path"],
+)
+
+app = FastAPI(title="SprintSmith Backend API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -78,6 +91,22 @@ async def auth_and_generation_rate_limit(request, call_next):
                 )
             events.append(now)
     return await call_next(request)
+
+
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    route = request.scope.get("route")
+    path = getattr(route, "path", request.url.path)
+    HTTP_REQUESTS.labels(request.method, path, str(response.status_code)).inc()
+    HTTP_LATENCY.labels(request.method, path).observe(time.perf_counter() - started)
+    return response
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 if settings.auto_create_tables:

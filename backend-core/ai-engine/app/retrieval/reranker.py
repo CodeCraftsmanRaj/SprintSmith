@@ -17,7 +17,7 @@ import logging
 
 from app.config import settings
 
-logger = logging.getLogger("devpilot.reranker")
+logger = logging.getLogger("sprintsmith.reranker")
 
 
 def with_reranking(base_retriever, top_n: int | None = None):

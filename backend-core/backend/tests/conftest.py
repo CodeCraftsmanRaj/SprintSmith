@@ -1,5 +1,5 @@
 """
-Global pytest fixtures for DevPilot backend tests.
+Global pytest fixtures for SprintSmith backend tests.
 
 Provides:
 - In-memory SQLite database isolation with StaticPool

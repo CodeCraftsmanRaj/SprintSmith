@@ -61,7 +61,7 @@ class Settings:
     RETRIEVAL_CONTEXT_TOKENS: int = int(os.environ.get("RETRIEVAL_CONTEXT_TOKENS", "3000"))
 
     # --- Vector store ---
-    COLLECTION_NAME: str = os.environ.get("COLLECTION_NAME", "devpilot_requirements")
+    COLLECTION_NAME: str = os.environ.get("COLLECTION_NAME", "sprintsmith_requirements")
 
     # --- Service ---
     PORT: int = int(os.environ.get("AI_ENGINE_PORT", "8001"))

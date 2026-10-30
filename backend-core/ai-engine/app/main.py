@@ -1,5 +1,5 @@
 """
-DevPilot AI Engine — FastAPI service (port 8001).
+SprintSmith AI Engine — FastAPI service (port 8001).
 
 Run locally: uvicorn app.main:app --reload --port 8001
 """
@@ -15,10 +15,10 @@ from app.api.v1.prompts import router as prompts_router
 from app.config import settings
 
 logging.basicConfig(level=settings.LOG_LEVEL)
-logger = logging.getLogger("devpilot.ai_engine")
+logger = logging.getLogger("sprintsmith.ai_engine")
 
 app = FastAPI(
-    title="DevPilot AI Engine",
+    title="SprintSmith AI Engine",
     description="GenAI + RAG + Prompt Engineering service ",
     version="1.0.0",
 )

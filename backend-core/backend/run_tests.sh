@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# DevPilot Backend Automated Test Runner
+# SprintSmith Backend Automated Test Runner
 #
 # Usage:
 #   ./run_tests.sh                # Run all backend tests
@@ -33,7 +33,7 @@ fi
 PYTEST_ARGS=("$@")
 
 echo "=========================================================="
-echo " DevPilot Backend Test Suite — Mode: $MODE"
+echo " SprintSmith Backend Test Suite — Mode: $MODE"
 echo " Runner: $PYTEST_BIN"
 echo "=========================================================="
 

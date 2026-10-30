@@ -1,4 +1,4 @@
-name: DevPilot Backend Core
+name: SprintSmith Backend Core
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: devpilot-backend-test-reports
+          name: sprintsmith-backend-test-reports
           path: |
             backend-core/backend/junit.xml
             backend-core/backend/coverage.xml

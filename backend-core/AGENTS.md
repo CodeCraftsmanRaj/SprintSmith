@@ -1,13 +1,13 @@
-# AGENTS.md — DevPilot (Barclays MDM capstone)
+# AGENTS.md — SprintSmith (Barclays MDM capstone)
 
 Two independent FastAPI services, no shared Python env or top-level package:
 
 - `backend/` — API gateway, port 8000 (auth, projects, requirements, artifacts, audit)
 - `ai-engine/` — RAG + generation service, port 8001 (LangChain, pgvector, Groq/Gemini)
 
-There is no frontend in this repo (the 2026-10-18 React scaffold was intentionally removed; keep it that way).
-The single exception is `tools/streamlit_app.py` — a minimal **dev tool** (upload/ingest/tree/generate),
-never grow it into a product frontend. It runs from its own venv (`~/.venvs/devpilot-ui`) because
+The product frontend lives in `../frontend` (TanStack Start, deployed to Cloudflare Workers).
+`tools/streamlit_app.py` is only a minimal **dev tool** (upload/ingest/tree/generate); do not grow
+it into a product frontend. It runs from its own venv (`~/.venvs/sprintsmith-ui`) because
 streamlit's starlette conflicts with the engine's `fastapi==0.115.0` pin; it talks only HTTP + DB.
 `IMPLEMENTATION.draft.md` (root) is the team's
 implementation plan — treat it as partially stale: several of its "immediate fixes"
@@ -28,9 +28,9 @@ AI engine (run from `ai-engine/`; use `.venv/`, an older `venv/` also exists —
 - Tests: `pytest tests/ -q` (~78 tests, fully offline: `Settings.validate()` is never called; LLM/retrieval are fake-patched in tests)
 - Run app: `uvicorn app.main:app --reload --port 8001` — real generation/ingest needs `GOOGLE_API_KEY` (embeddings, always) + `GROQ_API_KEY` (if a `groq-*` alias is set) + pgvector-enabled `DATABASE_URL`. `ai-engine/.env` holds real keys — never commit it.
 
-UI dev tool (needs db + engine + backend up): `/home/devanssh/.venvs/devpilot-ui/bin/streamlit run tools/streamlit_app.py` (browser at localhost:8501).
+UI dev tool (needs db + engine + backend up): `~/.venvs/sprintsmith-ui/bin/streamlit run tools/streamlit_app.py` (browser at localhost:8501).
 
-CI: `.github/workflows/backend-tests.yml` (Python 3.11) runs the backend suite plus a PostgreSQL job (`tests/repositories tests/integration tests/contract` against real PG after `alembic upgrade head`, driven by `TEST_DATABASE_URL`, default `sqlite://`). `.github/workflows/ai-engine-tests.yml` runs the engine's keyless offline suite. If you change models or migrations, assume the PG job must pass too.
+CI: `.github/workflows/backend-core.yml` (Python 3.11) runs the backend suite plus a PostgreSQL job (`tests/repositories tests/integration tests/contract` against real PG after `alembic upgrade head`, driven by `TEST_DATABASE_URL`, default `sqlite://`). `.github/workflows/ai-engine-core.yml` runs the engine's keyless offline suite. If you change models or migrations, assume the PG job must pass too.
 
 ## Gotchas
 
