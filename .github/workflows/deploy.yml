@@ -73,15 +73,30 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+      - name: Diagnose Cloudflare API access
+        env:
+          NODE_OPTIONS: --dns-result-order=ipv4first
+        run: |
+          echo "--- wrangler whoami ---"
+          npx --yes wrangler@4 whoami || echo "whoami failed"
+          echo "--- direct API probe (read-only, workers scripts list) ---"
+          code=$(curl -sS -o /tmp/cf-probe.json -w '%{http_code}' \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" || echo "curl-failed")
+          echo "HTTP ${code}"
+          head -c 600 /tmp/cf-probe.json 2>/dev/null || true
+          echo
       - name: Deploy Cloudflare Worker
         working-directory: frontend
         env:
           # GitHub runners advertise a broken IPv6 route; Node's fetch can pick
           # it and fail with "fetch failed". Prefer IPv4 for the Cloudflare API.
           NODE_OPTIONS: --dns-result-order=ipv4first
+          WRANGLER_LOG: debug
         run: |
+          set -o pipefail
           for attempt in 1 2 3; do
-            if npx --yes wrangler@4 deploy; then
+            if npx --yes wrangler@4 deploy 2>&1 | sed -E 's/[A-Za-z0-9_-]{40,}/<REDACTED>/g'; then
               exit 0
             fi
             echo "wrangler deploy failed (attempt ${attempt}/3)"
