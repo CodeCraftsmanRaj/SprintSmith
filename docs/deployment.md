@@ -212,8 +212,9 @@ through Grafana instead of exposing port 9090 publicly.
 
 ## GitHub Actions pipelines
 
-Four workflows start on every push, and the production workflow starts on
-`main` pushes and manual dispatches:
+Four test workflows run on pull requests, feature-branch pushes, and manual
+dispatches. The production workflow starts on `main` pushes and manual
+dispatches:
 
 1. `CI`: root lint and unit tests.
 2. `Full Stack Platform`: both Compose profiles, stack startup, and smoke test.
@@ -225,16 +226,21 @@ Four workflows start on every push, and the production workflow starts on
 The CI and full-stack workflows intentionally have separate responsibilities:
 CI runs the root lint and unit tests; Full Stack validates Compose, starts the
 stack, and smoke-tests the API. Backend-core and AI-engine tests are separate
-pipelines. There is one production deploy workflow; the old GHCR deploy path
-has been removed to avoid deploying the same backend twice.
+pipelines. These four test workflows are reusable by the production workflow.
+Pushes to `main` run those suites as production gates rather than starting
+duplicate standalone runs; deployment starts only after all four succeed.
+Pull requests, feature-branch pushes, and manual workflow dispatches retain
+their standalone test runs.
 
 The production workflow deploys backend and AI-engine images through Cloud
 Build and Artifact Registry using the repository-restricted GCP Workload
 Identity Federation provider. It does not use GHCR or long-lived GCP keys.
-Backend deployment runs automatically after a push to `main`. The frontend and
-backend jobs are independent: the Cloudflare Worker job still runs when the
-backend job fails (unless the workflow is cancelled). It runs only when the
-repository Actions variable `DEPLOY_FRONTEND` is exactly `true`.
+Backend deployment runs automatically after a push to `main`, but only after
+the CI, full-stack, backend-core, and AI-engine test suites all pass. If a
+test suite fails, neither deployment runs. The Cloudflare Worker job still runs
+when the backend deployment itself fails (unless the workflow is cancelled),
+provided all test suites passed. It runs only when the repository Actions
+variable `DEPLOY_FRONTEND` is exactly `true`.
 
 ### Configure GitHub for frontend deployment
 

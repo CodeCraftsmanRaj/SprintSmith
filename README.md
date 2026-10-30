@@ -204,11 +204,12 @@ Application secrets remain in `/opt/sprintsmith/.env` on the VM and are never
 uploaded with the Cloud Build source. No credentials belong in this repository.
 
 The complete deployment runbook is in [docs/deployment.md](docs/deployment.md).
-The CI, Full Stack, backend-core, and AI-engine workflows start on every push;
-the production workflow starts on pushes to `main` and on manual dispatch. It
-uses GitHub OIDC Workload Identity Federation to build and deploy through GCP,
-deploys the backend, and deploys the Cloudflare frontend when
-`DEPLOY_FRONTEND=true`. The first run requires the one-time
+The CI, Full Stack, backend-core, and AI-engine workflows run on pull requests
+and feature-branch pushes. On pushes to `main`, the production workflow runs
+those same test suites first and deploys only if all pass. It uses GitHub OIDC
+Workload Identity Federation to build and deploy through GCP, deploys the
+backend, and deploys the Cloudflare frontend when `DEPLOY_FRONTEND=true`. The
+first run requires the one-time
 `bash infra/deploy/gcp-bootstrap.sh` IAM setup.
 
 ## Local checks

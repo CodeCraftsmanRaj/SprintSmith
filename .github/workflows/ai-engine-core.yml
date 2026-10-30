@@ -2,12 +2,13 @@ name: SprintSmith AI Engine
 
 on:
   push:
-    branches: ["**"]
+    branches: ["**", "!main"]
   pull_request:
     paths:
       - "backend-core/ai-engine/**"
       - ".github/workflows/ai-engine-core.yml"
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

@@ -2,12 +2,13 @@ name: SprintSmith Backend Core
 
 on:
   push:
-    branches: ["**"]
+    branches: ["**", "!main"]
   pull_request:
     paths:
       - "backend-core/backend/**"
       - ".github/workflows/backend-core.yml"
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

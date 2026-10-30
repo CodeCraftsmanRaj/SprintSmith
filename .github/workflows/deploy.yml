@@ -13,9 +13,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test-ci:
+    name: CI tests
+    uses: ./.github/workflows/ci.yml
+
+  test-full-stack:
+    name: Full-stack integration tests
+    uses: ./.github/workflows/full-stack.yml
+
+  test-backend-core:
+    name: Backend-core tests
+    uses: ./.github/workflows/backend-core.yml
+
+  test-ai-engine:
+    name: AI-engine tests
+    uses: ./.github/workflows/ai-engine-core.yml
+
   deploy-backend:
     name: Build and deploy backend to GCP
     if: github.ref == 'refs/heads/main'
+    needs:
+      - test-ci
+      - test-full-stack
+      - test-backend-core
+      - test-ai-engine
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -38,9 +59,23 @@ jobs:
   deploy-frontend:
     name: Deploy frontend to Cloudflare Workers
     # Frontend and backend are independent deployments. Run the frontend even
-    # when the backend job fails, but not when the whole workflow is cancelled.
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && vars.DEPLOY_FRONTEND == 'true' }}
-    needs: deploy-backend
+    # when the backend job fails, but only after every test suite passes.
+    if: >-
+      ${{
+        !cancelled() &&
+        github.ref == 'refs/heads/main' &&
+        vars.DEPLOY_FRONTEND == 'true' &&
+        needs.test-ci.result == 'success' &&
+        needs.test-full-stack.result == 'success' &&
+        needs.test-backend-core.result == 'success' &&
+        needs.test-ai-engine.result == 'success'
+      }}
+    needs:
+      - test-ci
+      - test-full-stack
+      - test-backend-core
+      - test-ai-engine
+      - deploy-backend
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
