@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export CLOUDSDK_CORE_DISABLE_PROMPTS=1
 
 PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
 REGION="${GCP_REGION:-us-central1}"
@@ -78,10 +79,13 @@ EOF
 	fi
 fi
 
-REMOTE_TMP="$(gcloud compute ssh "$VM_NAME" \
+REMOTE_TMP="/tmp/sprintsmith-deploy-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-$$"
+
+gcloud compute ssh "$VM_NAME" \
 	--project "$PROJECT_ID" \
 	--zone "$ZONE" \
-	--command='mktemp -d /tmp/sprintsmith-deploy.XXXXXX')"
+	--quiet \
+	--command="mkdir -m 700 -- '${REMOTE_TMP}'"
 
 gcloud compute scp \
 	--recurse \
@@ -92,11 +96,13 @@ gcloud compute scp \
 	infra/db/init.sql \
 	"${VM_NAME}:${REMOTE_TMP}/" \
 	--project "$PROJECT_ID" \
-	--zone "$ZONE"
+	--zone "$ZONE" \
+	--quiet
 
 gcloud compute ssh "$VM_NAME" \
 	--project "$PROJECT_ID" \
 	--zone "$ZONE" \
+	--quiet \
 	--command="set -e
 		test -f /opt/sprintsmith/.env
 		sudo mkdir -p /opt/sprintsmith/infra/deploy /opt/sprintsmith/infra/db
