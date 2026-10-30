@@ -75,4 +75,16 @@ jobs:
         run: npm run build
       - name: Deploy Cloudflare Worker
         working-directory: frontend
-        run: npx --yes wrangler@4 deploy
+        env:
+          # GitHub runners advertise a broken IPv6 route; Node's fetch can pick
+          # it and fail with "fetch failed". Prefer IPv4 for the Cloudflare API.
+          NODE_OPTIONS: --dns-result-order=ipv4first
+        run: |
+          for attempt in 1 2 3; do
+            if npx --yes wrangler@4 deploy; then
+              exit 0
+            fi
+            echo "wrangler deploy failed (attempt ${attempt}/3)"
+            sleep 15
+          done
+          exit 1
