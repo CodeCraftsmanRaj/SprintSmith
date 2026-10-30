@@ -57,6 +57,14 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Validate Cloudflare credentials
         run: |
+          echo "CLOUDFLARE_API_TOKEN length: ${#CLOUDFLARE_API_TOKEN}"
+          echo "CLOUDFLARE_ACCOUNT_ID length: ${#CLOUDFLARE_ACCOUNT_ID}"
+          if printf '%s' "${CLOUDFLARE_API_TOKEN}" | grep -qP '\s'; then
+            echo "::error::CLOUDFLARE_API_TOKEN contains whitespace."
+          fi
+          if printf '%s' "${CLOUDFLARE_ACCOUNT_ID}" | grep -qP '\s'; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID contains whitespace."
+          fi
           status=0
           if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
             echo "::error::CLOUDFLARE_API_TOKEN is not set. Add it under Settings > Secrets and variables > Actions."
