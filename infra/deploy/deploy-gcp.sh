@@ -124,6 +124,12 @@ gcloud compute ssh "$VM_NAME" \
 		sudo docker builder prune -af >/dev/null 2>&1 || true
 		sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml pull
 		sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml up -d
+		# The Caddyfile is a read-only bind mount; changing its contents does not
+		# restart the running caddy container, so reload it explicitly so routes
+		# (e.g. /grafana/) added since the last deploy take effect.
+		if ! sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml exec -T caddy caddy reload --config /etc/caddy/Caddyfile; then
+			sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml restart caddy
+		fi
 		curl --fail --retry 20 --retry-delay 5 http://localhost:8002/health
 		if ! curl --fail --retry 20 --retry-delay 5 https://sprintsmith-api.rajmathuria.me/health; then
 			echo 'Local API is healthy, but public HTTPS failed. Point sprintsmith-api.rajmathuria.me to the VM static IP and verify Cloudflare TLS mode is Full (strict).' >&2
