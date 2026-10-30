@@ -61,9 +61,15 @@ jobs:
           if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
             echo "::error::CLOUDFLARE_API_TOKEN is not set. Add it under Settings > Secrets and variables > Actions."
             status=1
+          elif ! [[ "${CLOUDFLARE_API_TOKEN}" =~ ^[A-Za-z0-9_-]{40}$ ]]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is malformed (expected 40 letters/digits/_/- with no whitespace). Environment secrets override repository secrets; check Settings > Environments > production."
+            status=1
           fi
           if [ -z "${CLOUDFLARE_ACCOUNT_ID}" ]; then
             echo "::error::CLOUDFLARE_ACCOUNT_ID is not set. Add it under Settings > Secrets and variables > Actions."
+            status=1
+          elif ! [[ "${CLOUDFLARE_ACCOUNT_ID}" =~ ^[0-9a-f]{32}$ ]]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID is malformed (expected 32 lowercase hex characters)."
             status=1
           fi
           exit "$status"
