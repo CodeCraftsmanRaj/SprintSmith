@@ -98,7 +98,10 @@ services:
     restart: unless-stopped
     environment:
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://sprintsmith-api.rajmathuria.me/grafana/}
-      GF_SERVE_FROM_SUB_PATH: ${GRAFANA_SERVE_FROM_SUB_PATH:-true}
+      # Grafana 12.x ignores this flag and serves at the root regardless, so we
+      # strip the /grafana prefix in Caddy instead (see infra/deploy/Caddyfile).
+      # Keep it false to match the strip-prefix routing.
+      GF_SERVE_FROM_SUB_PATH: ${GRAFANA_SERVE_FROM_SUB_PATH:-false}
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_AUTH_DISABLE_LOGIN_FORM: "false"
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
