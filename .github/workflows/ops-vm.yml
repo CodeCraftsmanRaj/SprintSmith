@@ -1,0 +1,71 @@
+name: Ops - VM
+
+# Run a one-off command on the production VM without a full redeploy.
+# Useful for restarting/reloading a single service (e.g. caddy after a
+# Caddyfile change) or inspecting state. Only users with write access can
+# trigger workflow_dispatch runs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Shell command to run on the VM from /opt/sprintsmith (sudo is applied)"
+        required: false
+        default: "docker compose --env-file .env -f infra/deploy/compose.production.yaml restart caddy"
+      verify_grafana:
+        description: "Wait for Grafana to return 200 after running the command"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: Run command on VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/833405754913/locations/global/workloadIdentityPools/sprintsmith-github/providers/github
+          service_account: sprintsmith-github-deploy@major-project-512815.iam.gserviceaccount.com
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: major-project-512815
+      - name: Run command on VM
+        # gcloud ssh does not forward local env vars, and splicing the value
+        # directly into the script would be an injection risk. Encode to base64
+        # locally so the remote shell never re-evaluates it, then decode+execute.
+        env:
+          OPS_COMMAND: ${{ inputs.command }}
+        run: |
+          ENCODED="$(printf '%s' "$OPS_COMMAND" | base64 -w0)"
+          gcloud compute ssh sprintsmith-backend \
+            --project major-project-512815 \
+            --zone us-central1-a \
+            --quiet \
+            --command="cd /opt/sprintsmith && echo $ENCODED | base64 -d | sudo bash"
+      - name: Verify Grafana
+        if: ${{ inputs.verify_grafana }}
+        run: |
+          echo "Waiting for Grafana at https://sprintsmith-api.rajmathuria.me/grafana/api/health ..."
+          for i in $(seq 1 20); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
+              https://sprintsmith-api.rajmathuria.me/grafana/api/health || echo 000)
+            echo "attempt $i -> HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "Grafana is up."
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::Grafana did not return 200 within the wait window."
+          exit 1
