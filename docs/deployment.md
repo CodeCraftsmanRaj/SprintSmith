@@ -17,7 +17,8 @@ Cloudflare cannot host the Dockerized PostgreSQL, worker, and AI-engine stack di
 - Reserved external IP: `34.9.97.6`
 - API: `https://sprintsmith-api.rajmathuria.me`
 - Frontend hostname: `app.rajmathuria.me`
-- Grafana hostname: `grafana.rajmathuria.me` (after the DNS record is added)
+- Grafana: served on the API hostname at `/grafana/` (no DNS record needed);
+  optional dedicated hostname `grafana.rajmathuria.me`.
 - Existing `api.rajmathuria.me` and `portfolio.rajmathuria.me` are separate
   hostnames and must not be changed for this deployment.
 - The Compose services are `backend-core`, `ai-engine`, `db`, `caddy`,
@@ -142,7 +143,9 @@ Keep existing `api.rajmathuria.me` and `portfolio.rajmathuria.me` unchanged.
 Add separate SprintSmith hostnames:
 
 - `sprintsmith-api.rajmathuria.me`: A record to the backend VM (`34.9.97.6`)
-- `grafana.rajmathuria.me`: A record to the backend VM (`34.9.97.6`)
+- `grafana.rajmathuria.me`: optional A record to the backend VM (`34.9.97.6`)
+  for a dedicated Grafana hostname; without it, use
+  `https://sprintsmith-api.rajmathuria.me/grafana/`
 - `app.rajmathuria.me`: Cloudflare Worker custom domain
 
 Set `CORS_ORIGINS=https://app.rajmathuria.me` in the VM `.env`. The GitHub
@@ -176,15 +179,20 @@ The production Compose stack runs Prometheus and Grafana next to the backend:
 
 - Backend: `/metrics` on the private backend port (Prometheus exposition).
 - Prometheus: internal `prometheus:9090`, scraping `backend-core:8000/metrics`.
-- Grafana: `https://grafana.rajmathuria.me`, dashboard `SprintSmith API`.
+- Grafana: `https://sprintsmith-api.rajmathuria.me/grafana/`, dashboard
+  `SprintSmith API`. This subpath route reuses the existing API hostname, so
+  **no DNS record is required**.
 
-Before the first deploy, in Cloudflare DNS create:
+Optionally, for a dedicated hostname, add an `A` record `grafana` -> the VM
+static IP (`34.9.97.6`, DNS only at first), then set in `/opt/sprintsmith/.env`:
 
-- Type `A`, name `grafana`, content `34.9.97.6`, proxy status **DNS only** first.
+```bash
+GRAFANA_ROOT_URL=https://grafana.rajmathuria.me/
+GRAFANA_SERVE_FROM_SUB_PATH=false
+```
 
-Caddy obtains the origin certificate automatically; after
-`https://grafana.rajmathuria.me/api/health` works you can enable the Cloudflare
-proxy (SSL/TLS mode **Full (strict)**).
+and re-run the deployment. Existing `api.rajmathuria.me` and
+`portfolio.rajmathuria.me` stay untouched either way.
 
 The Grafana admin credentials come from the VM `.env`:
 
@@ -288,9 +296,10 @@ and, when enabled, frontend. Feature-branch pushes do not replace production.
    `CLOUDFLARE_API_TOKEN`. `CLOUDFLARE_ACCOUNT_ID` and `DEPLOY_FRONTEND=true`
    are already set.
 
-3. **Optional DNS for Grafana.** Add an `A` record `grafana` -> `34.9.97.6`
-   in Cloudflare. The backend deploys without it; only the Grafana URL stays
-   unreachable until the record exists.
+3. **Grafana needs no DNS.** It is served at
+   `https://sprintsmith-api.rajmathuria.me/grafana/` on the existing API
+   hostname. Optionally add an `A` record `grafana` -> `34.9.97.6` and switch
+   `GRAFANA_ROOT_URL`/`GRAFANA_SERVE_FROM_SUB_PATH` for a dedicated hostname.
 
 4. **Push or dispatch.** Commit and push to `main`, or use
    **Actions > Production Deployment > Run workflow**:
@@ -313,12 +322,13 @@ and, when enabled, frontend. Feature-branch pushes do not replace production.
    curl --fail https://sprintsmith-api.rajmathuria.me/health
    curl --fail https://sprintsmith-api.rajmathuria.me/health/db
    curl --fail https://sprintsmith-api.rajmathuria.me/health/ai
-   curl --fail https://grafana.rajmathuria.me/api/health
+   curl --fail https://sprintsmith-api.rajmathuria.me/grafana/api/health
    ```
 
    Open `https://sprintsmith-api.rajmathuria.me/docs`, `https://app.rajmathuria.me`,
-   and `https://grafana.rajmathuria.me` (login with the `GRAFANA_ADMIN_USER`
-   and `GRAFANA_ADMIN_PASSWORD` from `/opt/sprintsmith/.env`).
+   and `https://sprintsmith-api.rajmathuria.me/grafana/` (login with the
+   `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` from
+   `/opt/sprintsmith/.env`).
 
 If frontend deployment is not ready yet, set `DEPLOY_FRONTEND` to `false`;
 backend deployment still runs on `main`. To manually retry a failed deployment,

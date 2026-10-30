@@ -86,8 +86,8 @@ gcloud compute ssh "$VM_NAME" \
 			echo 'Local API is healthy, but public HTTPS failed. Point sprintsmith-api.rajmathuria.me to the VM static IP and verify Cloudflare TLS mode is Full (strict).' >&2
 			exit 1
 		fi
-		if ! curl --fail --retry 5 --retry-delay 3 -o /dev/null https://grafana.rajmathuria.me/api/health; then
-			echo 'Warning: Grafana is not reachable at https://grafana.rajmathuria.me. Add a Cloudflare DNS A record for grafana.rajmathuria.me -> the VM static IP.' >&2
+		if ! curl --fail --retry 5 --retry-delay 3 -o /dev/null https://sprintsmith-api.rajmathuria.me/grafana/api/health; then
+			echo 'Warning: Grafana is not reachable at https://sprintsmith-api.rajmathuria.me/grafana/. Check the caddy and grafana container logs.' >&2
 		fi
 		rmdir ${REMOTE_TMP}"
 
@@ -96,7 +96,7 @@ Deployed ${TAG} to ${VM_NAME}
 
   API:      https://sprintsmith-api.rajmathuria.me/health
   Frontend: https://app.rajmathuria.me
-  Grafana:  https://grafana.rajmathuria.me
+  Grafana:  https://sprintsmith-api.rajmathuria.me/grafana/
 
 The Grafana admin password is stored in /opt/sprintsmith/.env (variable
 GRAFANA_ADMIN_PASSWORD). Read it from the VM; never commit it.

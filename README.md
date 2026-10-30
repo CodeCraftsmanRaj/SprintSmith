@@ -186,13 +186,13 @@ Production URLs:
 | Backend API | https://sprintsmith-api.rajmathuria.me |
 | API documentation | https://sprintsmith-api.rajmathuria.me/docs |
 | Frontend | https://app.rajmathuria.me |
-| Grafana | https://grafana.rajmathuria.me |
+| Grafana | https://sprintsmith-api.rajmathuria.me/grafana/ |
 
 Monitoring is part of the production Compose stack: Prometheus scrapes the
 backend's `/metrics` endpoint on the private network, and Grafana is exposed
-through Caddy at `grafana.rajmathuria.me` with login enabled. See
-[docs/deployment.md](docs/deployment.md) for the DNS record and the admin
-password location.
+through Caddy on the existing API hostname (subpath `/grafana/`), so no extra
+DNS record is required. See [docs/deployment.md](docs/deployment.md) for the
+optional dedicated hostname and the admin password location.
 
 Deploy from an authenticated Google Cloud CLI session with:
 
