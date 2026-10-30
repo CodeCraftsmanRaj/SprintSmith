@@ -42,6 +42,12 @@ once from a checkout:
 GOOGLE_CLOUD_PROJECT=major-project-512815 bash infra/deploy/gcp-bootstrap.sh
 ```
 
+This is a one-time project-owner action; GitHub Actions cannot grant its own
+missing GCP permissions. Run it before retrying a failed deployment. If the
+script has already completed successfully and the same error persists, verify
+the deploy service account's project roles and staging-bucket IAM bindings in
+Cloud Console, and check whether an organization policy prevents those grants.
+
 The script is idempotent. It enables the required APIs, creates
 `sprintsmith-repo`, creates `gs://major-project-512815_cloudbuild` if needed,
 and grants the deploy, Cloud Build, and VM service accounts the required

@@ -17,9 +17,11 @@ if the user has the "serviceusage.services.use" permission.
 The GitHub Actions workflow authenticates to GCP with Workload Identity
 Federation and acts as the service account
 `sprintsmith-github-deploy@major-project-512815.iam.gserviceaccount.com`. That
-service account can log in, but it was never granted permission to submit
-Cloud Build jobs or to write the build's source archive to the Cloud Build
-staging bucket. Nothing else in the repository needs changing.
+service account can log in, but the project has not yet granted it permission
+to submit Cloud Build jobs or write the build's source archive to the Cloud
+Build staging bucket. A project owner must apply the IAM setup below before
+rerunning the failed GitHub Actions workflow; changing workflow code alone
+cannot grant these GCP permissions.
 
 ## What the service account will be allowed to do
 
@@ -145,7 +147,19 @@ gcloud projects get-iam-policy major-project-512815 \
   --flatten="bindings[].members" \
   --filter="bindings.members:serviceAccount:sprintsmith-github-deploy" \
   --format="table(bindings.role)"
+
+gcloud storage buckets get-iam-policy gs://major-project-512815_cloudbuild \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:serviceAccount:sprintsmith-github-deploy@major-project-512815.iam.gserviceaccount.com" \
+  --format="table(bindings.role,bindings.members)"
 ```
+
+The project policy must list `roles/serviceusage.serviceUsageConsumer`, and the
+bucket policy must list `roles/storage.admin` for the deploy service account.
+The deployment script reports the active GCP account and the matching bucket
+binding if Cloud Build still cannot upload its source. If the bindings are
+present but access is still denied, check IAM conditions and organization
+policies; rerunning the bootstrap will not override a policy-level deny.
 
 The GitHub Actions `Production Deployment` workflow can then be re-run from
 **Actions > Production Deployment > Run workflow** on `main`.

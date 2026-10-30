@@ -21,13 +21,13 @@ jobs:
       run:
         working-directory: backend-core/ai-engine
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: backend-core/ai-engine/requirements-dev.txt
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cache/huggingface
@@ -37,7 +37,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: ./run_tests.sh coverage --junitxml=junit-ai.xml --cov-report=xml
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sprintsmith-ai-engine-test-reports
           path: |

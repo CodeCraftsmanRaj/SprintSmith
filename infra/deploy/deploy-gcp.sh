@@ -6,6 +6,7 @@ REGION="${GCP_REGION:-us-central1}"
 ZONE="${GCP_ZONE:-us-central1-a}"
 VM_NAME="${GCP_VM_NAME:-sprintsmith-backend}"
 REPOSITORY="${ARTIFACT_REGISTRY_REPOSITORY:-sprintsmith-repo}"
+STAGING_BUCKET="${STAGING_BUCKET:-gs://${PROJECT_ID}_cloudbuild}"
 TAG="$(git rev-parse --short=12 HEAD)-$(date -u +%Y%m%d%H%M%S)"
 REGISTRY="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}"
 if [[ -n "${GCP_IMAGE_TAG:-}" ]]; then
@@ -23,8 +24,12 @@ if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" ]]; then
 fi
 
 if [[ "${SKIP_BUILD:-false}" != "true" ]]; then
+	ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
+	echo "Submitting Cloud Build as: ${ACTIVE_ACCOUNT:-unknown}"
+	echo "Cloud Build source staging bucket: ${STAGING_BUCKET}"
 	if ! gcloud builds submit \
 		--project "$PROJECT_ID" \
+		--gcs-source-staging-dir="${STAGING_BUCKET}/source" \
 		--config infra/deploy/cloudbuild.yaml \
 		--substitutions "_REGION=${REGION},_REPOSITORY=${REPOSITORY},_TAG=${TAG}" \
 		.; then
@@ -32,15 +37,43 @@ if [[ "${SKIP_BUILD:-false}" != "true" ]]; then
 
 Cloud Build could not submit the source archive.
 
-If the error mentions the Cloud Build staging bucket or
-"serviceusage.services.use", the GitHub deploy service account is missing
-permissions. A project owner must run once:
+Check the active account and its IAM bindings below. The GitHub Actions
+deployment must use:
 
-  bash infra/deploy/gcp-bootstrap.sh
+  sprintsmith-github-deploy@major-project-512815.iam.gserviceaccount.com
 
-The script grants Cloud Build submit/staging-bucket access, creates the
-Artifact Registry repository, and grants image push/pull permissions.
+The account needs roles/serviceusage.serviceUsageConsumer on the project and
+roles/storage.admin on the source staging bucket. A project owner can verify
+the bindings with:
+
+  gcloud projects get-iam-policy PROJECT_ID --flatten="bindings[].members" \
+    --filter="bindings.members:serviceAccount:ACTIVE_ACCOUNT" \
+    --format="table(bindings.role,bindings.members)"
+  gcloud storage buckets get-iam-policy STAGING_BUCKET \
+    --flatten="bindings[].members" \
+    --filter="bindings.members:serviceAccount:ACTIVE_ACCOUNT" \
+    --format="table(bindings.role,bindings.members)"
+
+If either binding is missing, a project owner can apply it with:
+
+  gcloud projects add-iam-policy-binding PROJECT_ID \
+    --member="serviceAccount:ACTIVE_ACCOUNT" \
+    --role=roles/serviceusage.serviceUsageConsumer --condition=None --quiet
+  gcloud storage buckets add-iam-policy-binding STAGING_BUCKET \
+    --member="serviceAccount:ACTIVE_ACCOUNT" \
+    --role=roles/storage.admin --condition=None --quiet
+
+Replace ACTIVE_ACCOUNT with the account reported above. If both bindings are
+present, inspect the bucket's IAM conditions and any organization policy that
+could deny Cloud Storage access.
 EOF
+		echo "Active gcloud account: ${ACTIVE_ACCOUNT:-unknown}" >&2
+		echo "Staging bucket IAM bindings for the active account:" >&2
+		gcloud storage buckets get-iam-policy "$STAGING_BUCKET" \
+			--flatten="bindings[].members" \
+			--filter="bindings.members:serviceAccount:${ACTIVE_ACCOUNT}" \
+			--format="table(bindings.role,bindings.members)" >&2 || \
+			echo "Could not read the staging bucket IAM policy." >&2
 		exit 1
 	fi
 fi

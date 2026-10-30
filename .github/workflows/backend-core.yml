@@ -20,8 +20,8 @@ jobs:
       run:
         working-directory: backend-core/backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -30,7 +30,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: ./run_tests.sh coverage --junitxml=junit.xml --cov-report=xml
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sprintsmith-backend-test-reports
           path: |
@@ -61,8 +61,8 @@ jobs:
       JWT_SECRET_KEY: ci-only-secret
       AI_ENGINE_URL: http://localhost:8001
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip

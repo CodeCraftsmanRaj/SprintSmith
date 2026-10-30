@@ -82,6 +82,7 @@ for sa in "$DEPLOY_SA_EMAIL" "$CLOUD_BUILD_SA" "$COMPUTE_SA"; do
 	gcloud storage buckets add-iam-policy-binding "$STAGING_BUCKET" \
 		--member="serviceAccount:${sa}" \
 		--role="roles/storage.admin" \
+		--condition=None \
 		--project "$PROJECT_ID" >/dev/null
 done
 
