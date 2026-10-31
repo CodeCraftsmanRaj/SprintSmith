@@ -22,6 +22,43 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      # Generate a fresh backend coverage report for SonarCloud. The backend
+      # suite runs on SQLite in-memory with the AI engine stubbed, so it needs
+      # no external services. Run from the repo root so the paths recorded in
+      # coverage.xml are repo-relative and map onto sonar.sources.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend-core/backend/requirements-dev.txt
+      - name: Install backend test dependencies
+        working-directory: backend-core/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Run backend tests with coverage
+        env:
+          PYTHONPATH: backend-core/backend
+        run: |
+          python -m pytest backend-core/backend/tests/ -q \
+            --cov=backend-core/backend/app \
+            --cov-report=xml:backend-core/backend/coverage.xml
+      # coverage.py writes filenames relative to the --cov source root (e.g.
+      # "main.py", "api/deps.py"). Rewrite them to be repo-relative so SonarCloud
+      # maps each file onto sonar.sources. Point <source> at the repo root and
+      # prefix every filename with the app root.
+      - name: Make coverage paths repo-relative
+        run: |
+          python - <<'PY'
+          import re
+          path = "backend-core/backend/coverage.xml"
+          prefix = "backend-core/backend/app"
+          xml = open(path).read()
+          xml = re.sub(r"<source>.*?</source>", "<source>.</source>", xml, count=1, flags=re.S)
+          xml = re.sub(r'filename="', f'filename="{prefix}/', xml)
+          open(path, "w").write(xml)
+          print("rewrote coverage paths to be repo-relative")
+          PY
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v8
         env:
