@@ -7,7 +7,7 @@ logger = logging.getLogger("sprintsmith.quality")
 
 # (?:...)|(?:...) grouping is explicit; [ \t]* (not \s*) keeps the alternation linear —
 # \s* at line boundaries can scan across newlines and backtrack super-linearly (S8786/S5850).
-_CODE_FENCE_RE = re.compile(r"^(?:```(?:json)?[ \t]*|[ \t]*```$)", re.MULTILINE)
+_CODE_FENCE_RE = re.compile(r"^(?:(?:```(?:json)?[ \t]*)|(?:[ \t]*```$))", re.MULTILINE)
 
 
 def _strip_code_fences(text: str) -> str:

@@ -124,12 +124,21 @@ gcloud compute ssh "$VM_NAME" \
 		sudo docker builder prune -af >/dev/null 2>&1 || true
 		sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml pull
 		sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml up -d
-		curl --fail --retry 20 --retry-delay 5 http://localhost:8002/health
-		if ! curl --fail --retry 20 --retry-delay 5 https://sprintsmith-api.rajmathuria.me/health; then
+		# The Caddyfile is a read-only bind mount; changing its contents does not
+		# restart the running caddy container, and a caddy reload via the admin
+		# API did not reliably apply new routes here, so restart the container
+		# instead. This re-reads the bind-mounted Caddyfile on startup,
+		# guaranteeing routes added since the last deploy (e.g. /grafana/) take
+		# effect. Brief blip on the TLS proxy only; the backend stays up.
+		sudo docker compose --env-file .env -f infra/deploy/compose.production.yaml restart caddy
+		# --retry-connrefused: right after a caddy restart, 443 refuses connections
+		# until caddy finishes booting; plain --retry does not retry exit code 7.
+		curl --fail --retry 20 --retry-connrefused --retry-delay 5 http://localhost:8002/health
+		if ! curl --fail --retry 20 --retry-connrefused --retry-delay 5 https://sprintsmith-api.rajmathuria.me/health; then
 			echo 'Local API is healthy, but public HTTPS failed. Point sprintsmith-api.rajmathuria.me to the VM static IP and verify Cloudflare TLS mode is Full (strict).' >&2
 			exit 1
 		fi
-		if ! curl --fail --retry 5 --retry-delay 3 -o /dev/null https://sprintsmith-api.rajmathuria.me/grafana/api/health; then
+		if ! curl --fail --retry 5 --retry-connrefused --retry-delay 3 -o /dev/null https://sprintsmith-api.rajmathuria.me/grafana/api/health; then
 			echo 'Warning: Grafana is not reachable at https://sprintsmith-api.rajmathuria.me/grafana/. Check the caddy and grafana container logs.' >&2
 		fi
 		rmdir ${REMOTE_TMP}"
