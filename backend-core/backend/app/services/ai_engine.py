@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 
 import httpx
 from fastapi import HTTPException
@@ -7,6 +8,7 @@ from app.core.config import settings
 from app.ports.ai_engine_port import AIEnginePort
 
 logger = logging.getLogger("sprintsmith.backend.ai_client")
+_SAFE_API_PATH = re.compile(r"/(?:[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*)\Z")
 
 
 class AIEngineClient(AIEnginePort):
@@ -15,6 +17,12 @@ class AIEngineClient(AIEnginePort):
         self.timeout = timeout
 
     async def _request(self, method: str, path: str, **kwargs):
+        # Paths may contain values from API route parameters (for example an
+        # artifact type). Accept only simple relative API segments so callers
+        # cannot inject a host, query, fragment, encoded path, or traversal.
+        if not isinstance(path, str) or not _SAFE_API_PATH.fullmatch(path):
+            raise HTTPException(status_code=400, detail="Invalid AI engine API path")
+
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.request(method, f"{self.base_url}{path}", **kwargs)
