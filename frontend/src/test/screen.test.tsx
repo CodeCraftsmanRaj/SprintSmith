@@ -15,7 +15,7 @@ describe("Screen component", () => {
   it("renders html and applies bodyClass", () => {
     const html = `<main><h1>Docling Pipeline</h1><p>Ingestion view</p></main>`;
     const { container } = render(
-      <Screen html={html} script="" bodyClass="bg-dark-workspace antialiased" />,
+      <Screen html={html} bodyClass="bg-dark-workspace antialiased" />,
     );
 
     expect(screen.getByRole("heading", { name: "Docling Pipeline" })).toBeInTheDocument();
@@ -23,23 +23,10 @@ describe("Screen component", () => {
     expect(container.firstChild).toHaveClass("bg-dark-workspace");
   });
 
-  it("executes script and catches script errors safely", () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const script = `window.__test_script_executed = true; throw new Error('Script failure');`;
-
-    render(<Screen html="<div>Content</div>" script={script} bodyClass="" />);
-
-    expect((window as unknown as { __test_script_executed: boolean }).__test_script_executed).toBe(
-      true,
-    );
-    expect(consoleSpy).toHaveBeenCalled();
-    consoleSpy.mockRestore();
-  });
-
   it("mounts children inside the live-slot portal within main element", () => {
     const html = `<main><section><p>Main body</p></section></main>`;
     render(
-      <Screen html={html} script="" bodyClass="">
+      <Screen html={html} bodyClass="">
         <div data-testid="injected-child">Portal Child Content</div>
       </Screen>,
     );
@@ -59,7 +46,7 @@ describe("Screen component", () => {
       </div>
     `;
 
-    render(<Screen html={html} script="" bodyClass="" />);
+    render(<Screen html={html} bodyClass="" />);
 
     const synthesizeLink = screen.getByText("Synthesize");
     fireEvent.click(synthesizeLink);
