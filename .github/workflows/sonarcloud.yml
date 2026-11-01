@@ -90,7 +90,18 @@ jobs:
           open(path, "w").write(xml)
           print("rewrote coverage paths to be repo-relative")
           PY
-      - name: SonarQube Scan
+      # SonarSource has reported intermittent 403 responses from the scanner
+      # binary CDN on GitHub-hosted runners. Retry once so a transient download
+      # denial does not fail an otherwise valid analysis.
+      - name: SonarQube Scan (attempt 1)
+        id: sonar_scan_attempt_1
+        continue-on-error: true
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+      - name: Retry SonarQube Scan
+        if: steps.sonar_scan_attempt_1.outcome == 'failure'
         uses: SonarSource/sonarqube-scan-action@v8
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
