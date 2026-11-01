@@ -29,6 +29,10 @@ jobs:
     name: AI-engine tests
     uses: ./.github/workflows/ai-engine-core.yml
 
+  test-frontend:
+    name: Frontend tests
+    uses: ./.github/workflows/frontend-core.yml
+
   deploy-backend:
     name: Build and deploy backend to GCP
     if: github.ref == 'refs/heads/main'
@@ -37,6 +41,7 @@ jobs:
       - test-full-stack
       - test-backend-core
       - test-ai-engine
+      - test-frontend
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -68,13 +73,15 @@ jobs:
         needs.test-ci.result == 'success' &&
         needs.test-full-stack.result == 'success' &&
         needs.test-backend-core.result == 'success' &&
-        needs.test-ai-engine.result == 'success'
+        needs.test-ai-engine.result == 'success' &&
+        needs.test-frontend.result == 'success'
       }}
     needs:
       - test-ci
       - test-full-stack
       - test-backend-core
       - test-ai-engine
+      - test-frontend
       - deploy-backend
     runs-on: ubuntu-latest
     timeout-minutes: 20
