@@ -43,7 +43,12 @@ async def create_ingest_job(db: Session, *, project_id: str, user: User,
         raise HTTPException(status_code=413, detail="Requirement file exceeds 10 MB")
 
     os.makedirs(upload_dir, exist_ok=True)
-    path = Path(upload_dir) / f"{uuid.uuid4()}{suffix}"
+    upload_root = Path(upload_dir).resolve()
+    path = (upload_root / f"{uuid.uuid4()}{suffix}").resolve()
+    try:
+        path.relative_to(upload_root)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid upload path")
     path.write_bytes(data)
     content = data.decode("utf-8", errors="replace") if suffix in TEXT_SUFFIXES else ""
 
