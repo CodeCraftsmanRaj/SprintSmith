@@ -11,7 +11,7 @@ const navItems = [
   { id: "activity", label: "Activity", icon: Activity },
 ] as const;
 type Page = (typeof navItems)[number]["id"];
-export function Workspace() {
+export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) => void } = {}) {
   const [token, setToken] = useState(() => typeof window === "undefined" ? "" : localStorage.getItem(tokenKey) || "");
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -65,6 +65,7 @@ export function Workspace() {
 
   function signOut() {
     localStorage.removeItem(tokenKey);
+    onTokenChange?.("");
     setToken(""); setUser(null); setProjects([]); setProject(null); setRequirements([]); setArtifacts([]);
   }
 
@@ -85,7 +86,7 @@ export function Workspace() {
         await api<User>("/api/v1/auth/register", undefined, { method: "POST", body: JSON.stringify({ email, password, full_name: form.get("full_name") }) });
       }
       const result = await api<{ access_token: string }>("/api/v1/auth/login", undefined, { method: "POST", body: JSON.stringify({ email, password }) });
-      localStorage.setItem(tokenKey, result.access_token); setToken(result.access_token);
+      localStorage.setItem(tokenKey, result.access_token); onTokenChange?.(result.access_token); setToken(result.access_token);
     } catch (e) { setError(e instanceof Error ? e.message : "Sign in failed"); }
     finally { setBusy(false); }
   }
