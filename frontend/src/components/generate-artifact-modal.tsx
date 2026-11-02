@@ -52,6 +52,15 @@ export function GenerateArtifactModal({ busy, error, onClose, onGenerate }: { bu
     return true;
   });
   const prompt = useMemo(() => selected ? buildRequirementText(selected, values) : "", [selected, values]);
+  const normalizedError = error.toLowerCase();
+  const vectorTimeout = /vector retrieval timed out/i.test(error);
+  const aiUnavailable =
+    normalizedError.includes("ai engine is unavailable") ||
+    normalizedError.includes("ai engine is temporarily unavailable");
+  const invalidAiResponse =
+    normalizedError.includes("ai engine returned an invalid response") ||
+    normalizedError.includes("invalid artifact response") ||
+    normalizedError.includes("invalid artifact payload");
   const change = (key: string, value: string | string[]) => {
     if (!selected) return;
     setValuesByType((all) => ({ ...all, [selected]: { ...(all[selected] ?? {}), [key]: value } }));
@@ -66,7 +75,26 @@ export function GenerateArtifactModal({ busy, error, onClose, onGenerate }: { bu
           {step === 2 && definition && <><button className="generator-back-link" type="button" onClick={() => setStep(1)}><ArrowLeft size={14} /> Change artifact type</button><h3>{definition.name} details</h3><div className="generator-fields">{definition.fields.map((field) => <label key={field.key} className={`generator-field ${field.kind === "textarea" ? "wide" : ""}`}><span>{field.label}{field.required && <i>Required</i>}</span>{field.kind === "textarea" ? <textarea value={String(values[field.key] ?? "")} onChange={(e) => change(field.key, e.target.value)} placeholder={field.placeholder} required={field.required} /> : field.kind === "select" ? <select value={String(values[field.key] ?? "")} onChange={(e) => change(field.key, e.target.value)} required={field.required}><option value="">Select an option</option>{field.options?.map((option) => <option key={option}>{option}</option>)}</select> : field.kind === "multi" ? <div className="generator-chips">{field.options?.map((option) => { const chosen = (values[field.key] as string[] | undefined)?.includes(option) ?? false; return <button type="button" key={option} className={chosen ? "chosen" : ""} onClick={() => change(field.key, chosen ? (values[field.key] as string[]).filter((item) => item !== option) : [...((values[field.key] as string[] | undefined) ?? []), option])}>{option}</button>; })}</div> : field.kind === "range" ? <div className="range-control"><input type="range" min={field.min} max={field.max} value={String(values[field.key] ?? "3")} onChange={(e) => change(field.key, e.target.value)} /><output>{values[field.key] ?? "3"}</output></div> : <input type={field.kind === "number" ? "number" : "text"} min={field.min} max={field.max} value={String(values[field.key] ?? "")} onChange={(e) => change(field.key, e.target.value)} required={field.required} />}</label>)}</div></>}
           {step === 3 && definition && <><button className="generator-back-link" type="button" onClick={() => setStep(2)}><ArrowLeft size={14} /> Edit details</button><h3>Review your prompt</h3><p className="generator-help">This structured brief will be sent to the existing artifact generator.</p><pre className="prompt-preview">{prompt}</pre></>}
         </div>
-        {error && <div className="generator-error" role="alert"><b>{/vector retrieval timed out/i.test(error) ? "Project search is taking longer than expected." : "Artifact generation failed."}</b><span>{/vector retrieval timed out/i.test(error) ? "Your inputs are still here. Try Generate artifact again in a moment." : error}</span></div>}
+        {error && (
+          <div className="generator-error" role="alert">
+            <b>
+              {vectorTimeout
+                ? "Project search is taking longer than expected."
+                : aiUnavailable
+                  ? "The AI engine is temporarily unavailable."
+                  : invalidAiResponse
+                    ? "The AI engine returned an invalid response."
+                    : "Artifact generation failed."}
+            </b>
+            <span>
+              {vectorTimeout
+                ? "Your inputs are still here. Try Generate artifact again in a moment."
+                : aiUnavailable || invalidAiResponse
+                  ? `Your prompt is still here. ${error} You can retry when ready.`
+                : error}
+            </span>
+          </div>
+        )}
         <footer className="generator-actions">{step > 1 && <button type="button" className="button button-quiet" onClick={() => setStep(step - 1)} disabled={busy}><ArrowLeft size={14} /> Back</button>}<span />{step === 1 ? <button type="button" className="button button-primary" disabled={!selected} onClick={() => setStep(2)}>Continue <ArrowRight size={14} /></button> : step === 2 ? <button type="button" className="button button-primary" disabled={!valid} onClick={() => setStep(3)}>Preview prompt <ArrowRight size={14} /></button> : <button type="button" className="button button-primary" disabled={!valid || busy} onClick={() => { if (selected && valid && !busy) onGenerate(selected, prompt); }}>{busy ? <><span className="button-spinner" /> Generating...</> : <><Sparkles size={15} /> Generate artifact</>}</button>}</footer>
       </div>
     </section>

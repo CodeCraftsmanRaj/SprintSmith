@@ -47,9 +47,11 @@ class ArtifactService:
         self.project_service.get_project_or_fail(project_id, user, write=True)
 
         result = await self.ai_client.generate(project_id, artifact_type, requirement_text)
-        content = result.get("output")
-        if not isinstance(content, dict):
-            raise ValidationError("AI engine returned an invalid artifact payload")
+        if not isinstance(result, dict) or not isinstance(result.get("output"), dict):
+            raise ValidationError(
+                "AI engine returned an invalid artifact payload. Please try generating again."
+            )
+        content = result["output"]
 
         artifact = Artifact(
             id=self.artifact_repo.new_id(),
