@@ -16,12 +16,10 @@ const PATHS: Record<string, string> = {
 /** Renders a static design screen; optional children are mounted at the top of the page's main area. */
 export function Screen({
   html,
-  script,
   bodyClass,
   children,
 }: {
   html: string;
-  script: string;
   bodyClass: string;
   children?: ReactNode;
 }) {
@@ -32,13 +30,6 @@ export function Screen({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (script) {
-      try {
-        new Function(script)();
-      } catch (e) {
-        console.error(e);
-      }
-    }
     if (children !== undefined) {
       const main = el.querySelector("main");
       const host = (main?.firstElementChild as HTMLElement | null) ?? main ?? el;
@@ -57,7 +48,7 @@ export function Screen({
     el.addEventListener("click", onClick);
     return () => el.removeEventListener("click", onClick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [html, script, navigate]);
+  }, [html, navigate]);
 
   return (
     <>
