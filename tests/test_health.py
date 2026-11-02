@@ -37,3 +37,12 @@ def test_metrics_endpoint_exposes_prometheus_format() -> None:
 
     assert response.status_code == 200
     assert "sprintsmith_http_requests_total" in response.text
+
+
+def test_metrics_404_uses_unmatched_path_label() -> None:
+    response = request("GET", "/.env")
+    assert response.status_code == 404
+
+    metrics = request("GET", "/metrics")
+    assert metrics.status_code == 200
+    assert 'method="GET",path="unmatched",status="404"' in metrics.text

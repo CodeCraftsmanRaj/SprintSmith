@@ -90,3 +90,12 @@ def test_metrics_endpoint_exposes_prometheus_format(client):
     assert "text/plain" in response.headers["content-type"]
     assert "sprintsmith_http_requests_total" in response.text
     assert "sprintsmith_http_request_duration_seconds" in response.text
+
+
+def test_metrics_404_uses_unmatched_path_label(client):
+    response = client.get("/.env")
+    assert response.status_code == 404
+
+    metrics = client.get("/metrics")
+    assert metrics.status_code == 200
+    assert 'method="GET",path="unmatched",status="404"' in metrics.text

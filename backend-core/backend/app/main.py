@@ -98,7 +98,9 @@ async def metrics_middleware(request, call_next):
     started = time.perf_counter()
     response = await call_next(request)
     route = request.scope.get("route")
-    path = getattr(route, "path", request.url.path)
+    path = getattr(route, "path", "unmatched")
+    if response.status_code == 404 and path == request.url.path:
+        path = "unmatched"
     HTTP_REQUESTS.labels(request.method, path, str(response.status_code)).inc()
     HTTP_LATENCY.labels(request.method, path).observe(time.perf_counter() - started)
     return response

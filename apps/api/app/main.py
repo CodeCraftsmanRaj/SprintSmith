@@ -55,10 +55,14 @@ async def request_logging(request: Request, call_next):
     request_id = request.headers.get("x-request-id", str(uuid4()))
     started = time.perf_counter()
     response = await call_next(request)
+    route = request.scope.get("route")
+    path = getattr(route, "path", "unmatched")
+    if response.status_code == 404 and path == request.url.path:
+        path = "unmatched"
     duration_seconds = time.perf_counter() - started
     duration_ms = round(duration_seconds * 1_000, 2)
-    HTTP_REQUESTS.labels(request.method, request.url.path, str(response.status_code)).inc()
-    HTTP_LATENCY.labels(request.method, request.url.path).observe(duration_seconds)
+    HTTP_REQUESTS.labels(request.method, path, str(response.status_code)).inc()
+    HTTP_LATENCY.labels(request.method, path).observe(duration_seconds)
     response.headers["x-request-id"] = request_id
     logger.info(
         json.dumps(
