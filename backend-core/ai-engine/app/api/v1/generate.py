@@ -45,10 +45,7 @@ class GenerateResponse(BaseModel):
     model_used: str | None = None
 
 
-# Only simple tokens may reach logs or the pipeline: project ids are UUIDs and
-# artifact types are registry keys, so anything else (control chars, newlines,
-# path separators) is rejected up front — log injection (S5145) / CWE-117.
-_SAFE_TOKEN = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
+_SAFE_TOKEN = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")  # log-injection guard (S5145)
 
 
 def _checked_schema(artifact_type: str):

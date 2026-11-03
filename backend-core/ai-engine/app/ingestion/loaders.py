@@ -48,12 +48,8 @@ def _download_from_s3(s3_uri: str) -> str:
 
     expected_owner = settings.S3_EXPECTED_BUCKET_OWNER
     if not expected_owner:
-        # Fail closed: without the expected owner we cannot verify the bucket
-        # belongs to us (S7608 — DNS-rebinding / bucket-squatting defence).
-        raise RuntimeError(
-            "S3_EXPECTED_BUCKET_OWNER is not set; refusing S3 download without "
-            "bucket-ownership verification."
-        )
+        # Fail closed: bucket ownership unverified (S7608).
+        raise RuntimeError("S3_EXPECTED_BUCKET_OWNER is not set; refusing S3 download without bucket-ownership verification.")
 
     parsed = urllib.parse.urlparse(s3_uri)
     bucket, key = parsed.netloc, parsed.path.lstrip("/")
