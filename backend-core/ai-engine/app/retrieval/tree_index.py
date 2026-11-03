@@ -157,7 +157,7 @@ def subtree_text(node: TreeNode) -> str:
 
 # ---------- parsers that produce Blocks ----------
 
-_MD_HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
+_MD_HEADING = re.compile(r"^(#{1,6})\s+([^\n]*)")
 
 
 def blocks_from_markdown(text: str) -> list[Block]:
@@ -165,7 +165,7 @@ def blocks_from_markdown(text: str) -> list[Block]:
     for line in text.splitlines():
         m = _MD_HEADING.match(line)
         if m:
-            blocks.append(Block(text=m.group(2), heading_level=len(m.group(1)), title=m.group(2)))
+            blocks.append(Block(text=m.group(2).strip(), heading_level=len(m.group(1)), title=m.group(2).strip()))
         elif line.strip():
             blocks.append(Block(text=line.strip()))
     return blocks
