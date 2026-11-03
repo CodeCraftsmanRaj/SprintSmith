@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Activity, ArrowDownToLine, ArrowRight, Bell, BookOpen, Check, ChevronDown, CircleHelp, Clock3, Command, Copy, Download, FileText, FolderKanban, Gauge, Layers3, LogOut, Plus, RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
-import { api, apiUrl, type Artifact, type Project, type Requirement, type User } from "@/lib/backend-api";
+import { Activity, ArrowDownToLine, ArrowRight, Bell, BookOpen, Check, ChevronDown, CircleHelp, Clock3, Command, Copy, Download, ExternalLink, FileText, FolderKanban, Gauge, Layers3, LogOut, Plus, RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
+import { api, apiUrl, type Artifact, type Project, type ProjectMonitoringDashboard, type Requirement, type User } from "@/lib/backend-api";
 import { GenerateArtifactModal, type ArtifactType } from "@/components/generate-artifact-modal";
 
 const tokenKey = "sprintsmith_access_token";
@@ -11,11 +11,32 @@ const navItems = [
   { id: "activity", label: "Activity", icon: Activity },
 ] as const;
 type Page = (typeof navItems)[number]["id"];
+
+async function getProjectMonitoringDashboard(projectId: string, authToken: string): Promise<ProjectMonitoringDashboard> {
+  try {
+    return await api<ProjectMonitoringDashboard>(
+      `/api/v1/projects/${projectId}/monitoring-dashboard`,
+      authToken,
+    );
+  } catch {
+    return {
+      available: false,
+      dashboard_url: null,
+      message: "Grafana dashboard could not be loaded. Refresh the workspace to try again.",
+    };
+  }
+}
+
 export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) => void } = {}) {
   const [token, setToken] = useState(() => typeof window === "undefined" ? "" : localStorage.getItem(tokenKey) || "");
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
+  const [monitoringDashboard, setMonitoringDashboard] = useState<ProjectMonitoringDashboard>({
+    available: false,
+    dashboard_url: null,
+    message: "Select a project to view its monitoring dashboard.",
+  });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [page, setPage] = useState<Page>("overview");
@@ -43,13 +64,23 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
     const selected = projectList.find((item) => item.id === selectedId) ?? projectList[0] ?? null;
     setProject(selected);
     if (selected) {
-      const [reqs, arts] = await Promise.all([
+      const [reqs, arts, dashboard] = await Promise.all([
         api<Requirement[]>(`/api/v1/projects/${selected.id}/requirements`, authToken),
         api<Artifact[]>(`/api/v1/projects/${selected.id}/artifacts`, authToken),
+        getProjectMonitoringDashboard(selected.id, authToken),
       ]);
       setRequirements(reqs);
       setArtifacts(arts);
-    } else { setRequirements([]); setArtifacts([]); }
+      setMonitoringDashboard(dashboard);
+    } else {
+      setRequirements([]);
+      setArtifacts([]);
+      setMonitoringDashboard({
+        available: false,
+        dashboard_url: null,
+        message: "Select a project to view its monitoring dashboard.",
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -67,6 +98,7 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
     localStorage.removeItem(tokenKey);
     onTokenChange?.("");
     setToken(""); setUser(null); setProjects([]); setProject(null); setRequirements([]); setArtifacts([]);
+    setMonitoringDashboard({ available: false, dashboard_url: null, message: "Sign in to view project monitoring." });
   }
 
   async function refresh() {
@@ -106,11 +138,13 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
     if (!token) return;
     const next = projects.find((item) => item.id === id); if (!next) return;
     setProject(next); setBusy(true); setError("");
+    setMonitoringDashboard({ available: false, dashboard_url: null, message: "Loading Grafana dashboard…" });
     try {
-      const [reqs, arts] = await Promise.all([
+      const [reqs, arts, dashboard] = await Promise.all([
         api<Requirement[]>(`/api/v1/projects/${id}/requirements`, token), api<Artifact[]>(`/api/v1/projects/${id}/artifacts`, token),
+        getProjectMonitoringDashboard(id, token),
       ]);
-      setRequirements(reqs); setArtifacts(arts); setPage("overview");
+      setRequirements(reqs); setArtifacts(arts); setMonitoringDashboard(dashboard); setPage("overview");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not open project"); }
     finally { setBusy(false); }
   }
@@ -181,6 +215,28 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
             <div className="metric-grid"><Metric label="Requirements" value={requirements.length} helper="Source documents" icon={FileText} color="amber" /><Metric label="Artifacts" value={artifacts.length} helper="Generated outputs" icon={Layers3} color="purple" /><Metric label="Project health" value={requirements.length ? "Active" : "Ready"} helper={requirements.length ? "Pipeline operational" : "Awaiting first input"} icon={ShieldCheck} color="green" /><Metric label="Last updated" value={artifacts[0] ? formatDate(artifacts[0].created_at) : "â€”"} helper="Most recent artifact" icon={Clock3} color="blue" /></div>
             <div className="dashboard-grid"><section className="panel pipeline-panel"><div className="panel-heading"><div><span className="section-kicker">WORKFLOW</span><h2>Project pipeline</h2></div><span className="live-label"><i /> LIVE STATUS</span></div><div className="pipeline"><PipelineStep icon={FileText} label="Requirements" count={requirements.length} state={requirements.length ? "complete" : "empty"} /><div className="pipeline-connector" /><PipelineStep icon={Sparkles} label="Generation" count={artifacts.length} state={artifacts.length ? "complete" : "empty"} /><div className="pipeline-connector" /><PipelineStep icon={Layers3} label="Artifacts" count={artifacts.length} state={artifacts.length ? "complete" : "empty"} /></div><div className="pipeline-foot"><span><span className="pulse-dot" />{requirements.length ? "Workspace is processing normally" : "Add a requirement to begin"}</span><button className="text-button" onClick={() => setPage("requirements")}>View requirements <ArrowRight size={14} /></button></div></section>
               <section className="panel activity-panel"><div className="panel-heading"><div><span className="section-kicker">PROJECT SNAPSHOT</span><h2>At a glance</h2></div><button className="icon-button" onClick={refresh}><RefreshCw size={15} /></button></div><div className="snapshot-row"><span className="snapshot-icon amber-bg"><FileText size={16} /></span><div><b>Source documents</b><small>Requirements in this project</small></div><strong>{requirements.length}</strong></div><div className="snapshot-row"><span className="snapshot-icon purple-bg"><Sparkles size={16} /></span><div><b>AI deliverables</b><small>Generated artifacts</small></div><strong>{artifacts.length}</strong></div><div className="snapshot-row"><span className="snapshot-icon green-bg"><Activity size={16} /></span><div><b>Backend status</b><small>Connected to API gateway</small></div><strong className="healthy">Healthy</strong></div><div className="snapshot-foot">Project created {formatDate(project.created_at)}</div></section></div>
+            <section className="panel monitoring-panel" aria-labelledby="monitoring-dashboard-title">
+              <div className="panel-heading">
+                <div><span className="section-kicker">OBSERVABILITY</span><h2 id="monitoring-dashboard-title">Grafana dashboard</h2></div>
+                <span className="panel-icon purple-bg"><Activity size={17} /></span>
+              </div>
+              {monitoringDashboard.dashboard_url ? (
+                <>
+                  <p className="panel-copy">Project-specific request rate, latency, and response status for {project.name}.</p>
+                  <a
+                    className="button button-quiet"
+                    href={monitoringDashboard.dashboard_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open Grafana dashboard for ${project.name} in a new tab`}
+                  >
+                    Open project dashboard <ExternalLink size={15} />
+                  </a>
+                </>
+              ) : (
+                <p className="panel-copy" role="status">{monitoringDashboard.message}</p>
+              )}
+            </section>
             <section className="panel table-panel"><div className="panel-heading"><div><span className="section-kicker">RECENT OUTPUT</span><h2>Latest artifacts</h2></div><button className="text-button" onClick={() => setPage("artifacts")}>View all <ArrowRight size={14} /></button></div><ArtifactTable items={recentArtifacts} onSelect={setSelectedArtifact} onPage={() => setPage("artifacts")} /></section>
           </>}
           {page === "requirements" && <><div className="requirements-actions-row"><div className="panel form-panel"><div className="panel-heading"><div><span className="section-kicker">SOURCE INPUT</span><h2>Add a requirement</h2></div><span className="panel-icon amber-bg"><Upload size={17} /></span></div><p className="panel-copy">Upload a document or paste requirement text. The backend will index it for generation.</p><form className="stack-form" onSubmit={ingest}><label className="field-label" htmlFor="requirement-text">Paste requirement text <span>10â€“50,000 characters</span></label><textarea id="requirement-text" className="text-area" value={requirementText} onChange={(e) => { setRequirementText(e.target.value); setRequirementFile(null); }} minLength={10} maxLength={50000} placeholder="Describe the product requirement, feature, or business need..." /><div className="or-divider"><span>OR UPLOAD DOCUMENT</span></div><label className="drop-zone"><input type="file" accept=".txt,.md,.pdf,.docx,.html,.csv" onChange={(e) => { setRequirementFile(e.target.files?.[0] ?? null); setRequirementText(""); }} /><Upload size={20} /><b>{requirementFile ? requirementFile.name : "Choose a file or drag it here"}</b><small>TXT, Markdown, PDF, DOCX up to 10 MB</small></label><button type="submit" className="button button-primary full-button" disabled={busy || (!requirementFile && requirementText.trim().length < 10)}>{busy ? <><span className="button-spinner" /> Submitting...</> : <><Plus size={16} /> Submit requirement</>}</button></form></div><button className="button button-primary generate-launch" onClick={() => setShowGenerate(true)}><Sparkles size={17} /> Generate Artifact <ArrowRight size={15} /></button></div><section className="panel requirements-list"><div className="panel-heading"><div><span className="section-kicker">PROJECT INPUTS</span><h2>Requirements <span className="count-badge">{requirements.length}</span></h2></div><button className="icon-button" onClick={refresh}><RefreshCw size={15} /></button></div><RequirementTable items={requirements} formatDate={formatDate} /></section></>}

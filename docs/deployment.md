@@ -188,6 +188,9 @@ The production Compose stack runs Prometheus and Grafana next to the backend:
 - Grafana: `https://sprintsmith-api.rajmathuria.me/grafana/`, dashboard
   `SprintSmith API`. This subpath route reuses the existing API hostname, so
   **no DNS record is required**.
+- The backend uses the same `GRAFANA_ROOT_URL` to build authorized,
+  project-scoped links. The provisioned dashboard filters request rate,
+  latency, and response status by project ID.
 
 Optionally, for a dedicated hostname, add an `A` record `grafana` -> the VM
 static IP (`34.9.97.6`, DNS only at first), then set in `/opt/sprintsmith/.env`:

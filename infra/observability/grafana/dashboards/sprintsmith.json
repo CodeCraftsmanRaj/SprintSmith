@@ -4,35 +4,57 @@
   "panels": [
     {
       "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0},
+      "id": 4,
+      "options": {"content": "Project ID: **${project_id}**", "mode": "markdown"},
+      "title": "Selected project",
+      "type": "text"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
       "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 3},
       "id": 1,
       "title": "HTTP request rate",
       "type": "timeseries",
-      "targets": [{"expr": "sum(rate(sprintsmith_http_requests_total[5m]))", "legendFormat": "requests/sec"}]
+      "targets": [{"expr": "sum(rate(sprintsmith_project_http_requests_total{project_id=\"$project_id\"}[5m]))", "legendFormat": "requests/sec"}]
     },
     {
       "datasource": {"type": "prometheus", "uid": "Prometheus"},
       "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 3},
       "id": 2,
       "title": "API latency p95",
       "type": "timeseries",
-      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(sprintsmith_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95"}]
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(sprintsmith_project_http_request_duration_seconds_bucket{project_id=\"$project_id\"}[5m])) by (le))", "legendFormat": "p95"}]
     },
     {
       "datasource": {"type": "prometheus", "uid": "Prometheus"},
       "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 11},
       "id": 3,
       "title": "HTTP responses",
       "type": "timeseries",
-      "targets": [{"expr": "sum by (status) (rate(sprintsmith_http_requests_total[5m]))", "legendFormat": "{{status}}"}]
+      "targets": [{"expr": "sum by (status) (rate(sprintsmith_project_http_requests_total{project_id=\"$project_id\"}[5m]))", "legendFormat": "{{status}}"}]
     }
   ],
   "schemaVersion": 41,
   "tags": ["sprintsmith", "api"],
-  "templating": {"list": []},
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": false, "text": "", "value": ""},
+        "description": "Set by the project link from SprintSmith.",
+        "hide": 0,
+        "label": "Project ID",
+        "name": "project_id",
+        "options": [],
+        "query": "",
+        "skipUrlSync": false,
+        "type": "textbox"
+      }
+    ]
+  },
   "time": {"from": "now-30m", "to": "now"},
   "title": "SprintSmith API",
   "uid": "sprintsmith-api",

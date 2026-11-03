@@ -23,6 +23,12 @@ class ProjectOut(BaseModel):
     created_at: datetime
 
 
+class ProjectMonitoringDashboard(BaseModel):
+    available: bool
+    dashboard_url: str | None = None
+    message: str | None = None
+
+
 class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     description: str | None = Field(default=None, max_length=10000)
