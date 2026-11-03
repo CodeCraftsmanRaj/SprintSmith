@@ -44,16 +44,14 @@ async def create_ingest_job(db: Session, *, project_id: str, user: User,
 
     os.makedirs(upload_dir, exist_ok=True)
     upload_root = Path(upload_dir).resolve()
-    path = (upload_root / f"{uuid.uuid4()}{suffix}").resolve()
-    # Hard guard: the resolved file must live inside upload_root — no path
-    # traversal (uuid4 filename + extension check + relative_to already make
-    # this safe; this explicit check also satisfies the taint analyzer).
-    try:
-        path.relative_to(upload_root)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid upload path")
-    if not str(path).startswith(str(upload_root) + os.sep) and path != upload_root:
-        raise HTTPException(status_code=400, detail="Path escapes upload directory")
+    # Write to a server-generated temp file name only — no user-controlled data
+    # reaches the file path (uuid4 + tempfile random name), which prevents path
+    # traversal (S2083). The original suffix is kept only for the text-sniff
+    # check and database record, never in the on-disk path.
+    tmp = tempfile.NamedTemporaryFile(dir=upload_dir, delete=False)
+    tmp.write(data)
+    tmp.close()
+    path = Path(tmp.name).resolve()
     path.write_bytes(data)
     content = data.decode("utf-8", errors="replace") if suffix in TEXT_SUFFIXES else ""
 
