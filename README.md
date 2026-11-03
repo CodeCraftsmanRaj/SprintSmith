@@ -269,3 +269,29 @@ inspection, but are ignored by Git and are not imported as runtime dependencies.
 Do not commit extracted contents, secrets, raw document text, or unrestricted
 prompts. The current platform does not transmit their contents to an external
 model provider.
+
+## License
+
+SprintSmith is released under the [MIT License](LICENSE).
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for our
+workflow, code-quality requirements, and how we handle issues and pull requests.
+
+### Quick contributor checklist
+
+- [ ] Create or comment on an issue before starting work
+- [ ] Assign the issue to yourself when you begin
+- [ ] Create a branch from `main` (e.g. `fix/123-description`)
+- [ ] Add tests for new behavior
+- [ ] Run local checks: `uv sync --extra dev`, `uv run ruff check .`,
+      `uv run pytest -q`
+- [ ] Open a PR against `main` and wait for all CI checks to pass
+- [ ] Merge only after the pipeline is green
+
+## Status board
+
+Open issues and their assignees are tracked on the project board. Issues we fix
+are assigned to the person doing the work.
+
