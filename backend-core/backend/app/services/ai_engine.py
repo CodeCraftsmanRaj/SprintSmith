@@ -96,6 +96,8 @@ class AIEngineClient(AIEnginePort):
             response = await client.send(request, stream=True)
             if response.status_code >= 400:
                 await response.aread()
+                await response.aclose()
+                await client.aclose()
                 raise HTTPException(status_code=502,
                                     detail=f"AI engine stream failed: {response.status_code}")
         except httpx.RequestError as exc:

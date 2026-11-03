@@ -1,4 +1,6 @@
 """File loaders: plain text, markdown, docling path, unstructured fallback, S3, errors."""
+import sys
+from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -91,6 +93,14 @@ def test_empty_extraction_raises_for_non_pdf(tmp_path):
             load_requirement_doc(str(f), "proj-1")
 
 
+def test_whitespace_only_plain_text_is_rejected(tmp_path):
+    f = tmp_path / "blank.txt"
+    f.write_text(" \n\t ")
+
+    with pytest.raises(ValueError, match="no text"):
+        load_requirement_doc(str(f), "proj-1")
+
+
 def test_s3_path_downloads_then_loads(monkeypatch):
     mock_doc = Document(page_content="s3 content", metadata={})
     with patch("app.ingestion.loaders._download_from_s3", return_value="/tmp/downloaded.pdf") as mock_dl, \
@@ -147,3 +157,64 @@ def test_scanned_pdf_fallback_for_empty_extraction(monkeypatch, tmp_path):
 
     mock_fallback.assert_called_once()
     assert docs[0].page_content == "textract content"
+
+
+def test_scanned_pdf_fallback_after_unstructured_failure(tmp_path):
+    f = tmp_path / "scanned.pdf"
+    f.write_bytes(b"%PDF-1.4 fake scanned")
+    doc = Document(page_content="OCR text", metadata={})
+
+    with patch("app.ingestion.loaders._load_with_unstructured", side_effect=RuntimeError("parse failed")), \
+         patch("app.ingestion.loaders._load_scanned_pdf_fallback", return_value=[doc]) as fallback:
+        result = load_requirement_doc(str(f), "proj-1")
+
+    fallback.assert_called_once_with(str(f))
+    assert result[0].page_content == "OCR text"
+    assert result[0].metadata["source"] == str(f)
+
+
+def test_load_with_unstructured_uses_single_document_loader(tmp_path):
+    loader_module = ModuleType("langchain_community.document_loaders")
+    loader_class = MagicMock()
+    loader_class.return_value.load.return_value = [Document(page_content="parsed", metadata={})]
+    loader_module.UnstructuredFileLoader = loader_class
+    f = tmp_path / "requirements.csv"
+    f.write_text("id,requirement")
+
+    with patch.dict(sys.modules, {"langchain_community.document_loaders": loader_module}):
+        from app.ingestion.loaders import _load_with_unstructured
+        docs = _load_with_unstructured(str(f))
+
+    loader_class.assert_called_once_with(str(f), mode="single")
+    assert docs[0].page_content == "parsed"
+
+
+def test_load_with_docling_preserves_structured_blocks(monkeypatch, tmp_path):
+    parser_module = ModuleType("app.ingestion.docling_parser")
+    blocks = [SimpleNamespace(title="Overview", page_start=1)]
+    parser_module.parse_to_blocks = MagicMock(return_value=blocks)
+    parser_module.blocks_to_markdown = MagicMock(return_value="# Overview\nBody")
+
+    with patch.dict(sys.modules, {"app.ingestion.docling_parser": parser_module}):
+        from app.ingestion.loaders import _load_with_docling
+        docs = _load_with_docling(str(tmp_path / "requirements.pdf"))
+
+    parser_module.parse_to_blocks.assert_called_once_with(str(tmp_path / "requirements.pdf"))
+    parser_module.blocks_to_markdown.assert_called_once_with(blocks)
+    assert docs[0].page_content == "# Overview\nBody"
+    assert docs[0].metadata["parser"] == "docling"
+    assert docs[0].metadata["_blocks"] == blocks
+
+
+def test_load_with_scanned_pdf_fallback_uses_textract_loader(tmp_path):
+    loader_module = ModuleType("langchain_community.document_loaders")
+    loader_class = MagicMock()
+    loader_class.return_value.load.return_value = [Document(page_content="ocr", metadata={})]
+    loader_module.AmazonTextractPDFLoader = loader_class
+
+    with patch.dict(sys.modules, {"langchain_community.document_loaders": loader_module}):
+        from app.ingestion.loaders import _load_scanned_pdf_fallback
+        docs = _load_scanned_pdf_fallback(str(tmp_path / "scan.pdf"))
+
+    loader_class.assert_called_once_with(str(tmp_path / "scan.pdf"))
+    assert docs[0].page_content == "ocr"

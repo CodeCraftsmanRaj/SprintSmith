@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from starlette.responses import Response
+from starlette.routing import Route
 
 from app.database import Base, get_db
 from app.main import app
@@ -98,4 +100,20 @@ def test_metrics_404_uses_unmatched_path_label(client):
 
     metrics = client.get("/metrics")
     assert metrics.status_code == 200
+    assert 'method="GET",path="unmatched",status="404"' in metrics.text
+
+
+def test_metrics_uses_unmatched_label_for_route_that_returns_404(client):
+    async def known_route_returns_404(_request):
+        return Response(status_code=404)
+
+    route = Route("/coverage-route-404", known_route_returns_404, methods=["GET"])
+    app.router.routes.append(route)
+    try:
+        response = client.get("/coverage-route-404")
+    finally:
+        app.router.routes.remove(route)
+
+    assert response.status_code == 404
+    metrics = client.get("/metrics")
     assert 'method="GET",path="unmatched",status="404"' in metrics.text
