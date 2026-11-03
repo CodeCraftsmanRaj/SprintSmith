@@ -38,12 +38,12 @@ export function Screen({
       host.prepend(div);
       setSlot(div);
     }
-    const onClick = (e: MouseEvent) => {
+    const onClick = async (e: MouseEvent) => {
       const a = (e.target as HTMLElement).closest("a");
       if (!a) return;
       const p = a.getAttribute("data-path");
       if (a.getAttribute("href") === "#") e.preventDefault();
-      if (p && PATHS[p]) navigate({ to: PATHS[p] as "/" });
+      if (p && PATHS[p]) await navigate({ to: PATHS[p] as "/" });
     };
     el.addEventListener("click", onClick);
     return () => el.removeEventListener("click", onClick);
