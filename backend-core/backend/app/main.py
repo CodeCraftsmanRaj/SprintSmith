@@ -33,6 +33,16 @@ HTTP_LATENCY = Histogram(
     "HTTP request duration in seconds.",
     ["method", "path"],
 )
+PROJECT_HTTP_REQUESTS = Counter(
+    "sprintsmith_project_http_requests_total",
+    "HTTP requests handled for an individual project.",
+    ["project_id", "status"],
+)
+PROJECT_HTTP_LATENCY = Histogram(
+    "sprintsmith_project_http_request_duration_seconds",
+    "HTTP request duration for an individual project.",
+    ["project_id"],
+)
 
 app = FastAPI(title="SprintSmith Backend API", version="1.0.0")
 app.add_middleware(
@@ -103,6 +113,10 @@ async def metrics_middleware(request, call_next):
         path = "unmatched"
     HTTP_REQUESTS.labels(request.method, path, str(response.status_code)).inc()
     HTTP_LATENCY.labels(request.method, path).observe(time.perf_counter() - started)
+    project_id = request.path_params.get("project_id")
+    if project_id and response.status_code not in {401, 403, 404}:
+        PROJECT_HTTP_REQUESTS.labels(project_id, str(response.status_code)).inc()
+        PROJECT_HTTP_LATENCY.labels(project_id).observe(time.perf_counter() - started)
     return response
 
 

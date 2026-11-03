@@ -7,9 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from app.api.deps import get_artifact_service, get_current_user, get_project_service
 from app.core.exceptions import AuthorisationError, ResourceNotFoundError, ValidationError
 from app.domain.models import User
-from app.domain.schemas import ProjectCreate, ProjectOut, ProjectUpdate
+from app.domain.schemas import (
+    ProjectCreate,
+    ProjectMonitoringDashboard,
+    ProjectOut,
+    ProjectUpdate,
+)
 from app.services.artifact_service import ArtifactService
+from app.services.grafana_dashboard import project_grafana_dashboard
 from app.services.project_service import ProjectService
+from app.core.config import settings
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -47,6 +54,29 @@ def read_project(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthorisationError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.get(
+    "/{project_id}/monitoring-dashboard",
+    response_model=ProjectMonitoringDashboard,
+)
+def project_monitoring_dashboard(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        project = project_service.get_project_or_fail(project_id, user)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+
+    return project_grafana_dashboard(
+        project.id,
+        settings.grafana_root_url,
+        settings.grafana_dashboard_uid,
+    )
 
 
 @router.patch("/{project_id}", response_model=ProjectOut)
