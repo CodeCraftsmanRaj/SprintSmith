@@ -1,4 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Workspace } from "@/screens/workspace";
+import { ProtectedWorkspace } from "@/components/ProtectedWorkspace";
 
-export const Route = createFileRoute("/audit")({ component: Workspace });
+export const Route = createFileRoute("/audit")({ component: ProtectedWorkspace });
