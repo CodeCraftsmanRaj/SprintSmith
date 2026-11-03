@@ -7,16 +7,24 @@ function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
 }
 
+// Strips trailing slashes without a super-linear regular expression (/\/+$/ can
+// backtrack quadratically on long slash runs followed by a non-slash char).
+function stripTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charAt(end - 1) === "/") end -= 1;
+  return url.slice(0, end);
+}
+
 // The public URL can be reachable only from the browser, so server requests go to the runtime URL of the same backend.
 function serverSupabaseUrl(publicUrl: string, supabaseKey: string): string | undefined {
   if (typeof window !== 'undefined' || typeof process === 'undefined') return undefined;
-  const serverUrl = process.env['SUPABASE_URL']?.replace(/\/+$/, '');
+  const serverUrl = process.env['SUPABASE_URL'] ? stripTrailingSlashes(process.env['SUPABASE_URL']) : undefined;
   if (!serverUrl || serverUrl === publicUrl || process.env['SUPABASE_PUBLISHABLE_KEY'] !== supabaseKey) return undefined;
   return serverUrl;
 }
 
 function createSupabaseFetch(supabaseUrl: string, supabaseKey: string): typeof fetch {
-  const publicUrl = supabaseUrl.replace(/\/+$/, '');
+  const publicUrl = stripTrailingSlashes(supabaseUrl);
   const serverUrl = serverSupabaseUrl(publicUrl, supabaseKey);
   return (input, init) => {
     const headers = new Headers(
