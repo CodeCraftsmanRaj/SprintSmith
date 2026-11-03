@@ -11,6 +11,7 @@ The engine contract (ai-engine/app/main.py):
 """
 import logging
 import os
+import tempfile
 import uuid
 from pathlib import Path
 
