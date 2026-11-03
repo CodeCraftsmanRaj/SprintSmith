@@ -28,8 +28,12 @@ def project_grafana_dashboard(
         return _invalid_configuration()
 
     try:
-        normalized_root = str(_HTTP_URL.validate_python(root_url.strip()))
-        root = urlsplit(normalized_root)
+        configured_root = root_url.strip()
+        # Inspect the original URL before Pydantic normalizes dot segments or
+        # backslashes, otherwise encoded traversal can be hidden by parsing.
+        if "\\" in configured_root:
+            return _invalid_configuration()
+        root = urlsplit(configured_root)
         # Accessing .port also validates malformed port values.
         _ = root.port
         decoded_path = unquote(root.path)
@@ -45,6 +49,8 @@ def project_grafana_dashboard(
         ):
             return _invalid_configuration()
 
+        normalized_root = str(_HTTP_URL.validate_python(configured_root))
+        root = urlsplit(normalized_root)
         base_path = root.path.rstrip("/")
         dashboard_path = f"{base_path}/d/{dashboard_uid}/{dashboard_uid}"
         query = urlencode({"var-project_id": project_id})

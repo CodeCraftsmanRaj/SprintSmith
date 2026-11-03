@@ -227,6 +227,59 @@ describe("Workspace - Project Management", () => {
     expect(await screen.findByText("beta-specs.pdf")).toBeInTheDocument();
   });
 
+  it("shows the project-specific Grafana link when the dashboard is available", async () => {
+    const project = {
+      id: "project-grafana",
+      name: "Grafana Project",
+      description: "Monitoring test",
+      created_at: "2026-09-01T00:00:00Z",
+    };
+    vi.spyOn(backendApi, "api").mockImplementation((path) => {
+      if (path === "/api/v1/auth/me") return Promise.resolve(mockUser);
+      if (path === "/api/v1/projects") return Promise.resolve([project]);
+      if (path === "/api/v1/projects/project-grafana/monitoring-dashboard") {
+        return Promise.resolve({
+          available: true,
+          dashboard_url: "https://grafana.example.com/d/sprintsmith/sprintsmith?var-project_id=project-grafana",
+          message: null,
+        });
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<Workspace />);
+
+    const dashboardLink = await screen.findByRole("link", { name: /open grafana dashboard for grafana project/i });
+    expect(dashboardLink).toHaveAttribute(
+      "href",
+      "https://grafana.example.com/d/sprintsmith/sprintsmith?var-project_id=project-grafana",
+    );
+    expect(dashboardLink).toHaveAttribute("target", "_blank");
+  });
+
+  it("shows a helpful fallback when the Grafana dashboard request fails", async () => {
+    const project = {
+      id: "project-grafana",
+      name: "Grafana Project",
+      description: "Monitoring test",
+      created_at: "2026-09-01T00:00:00Z",
+    };
+    vi.spyOn(backendApi, "api").mockImplementation((path) => {
+      if (path === "/api/v1/auth/me") return Promise.resolve(mockUser);
+      if (path === "/api/v1/projects") return Promise.resolve([project]);
+      if (path === "/api/v1/projects/project-grafana/monitoring-dashboard") {
+        return Promise.reject(new Error("Grafana unavailable"));
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<Workspace />);
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Grafana dashboard could not be loaded. Refresh the workspace to try again.",
+    );
+  });
+
   it("refreshes workspace when refresh button is clicked", async () => {
     const proj = {
       id: "p-1",
