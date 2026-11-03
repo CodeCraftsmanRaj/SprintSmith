@@ -70,6 +70,9 @@ class Settings:
     # --- Quota guardrail (Gemini free tier daily cap — configurable, not hardcoded) ---
     DAILY_REQUEST_QUOTA: int = int(os.environ.get("DAILY_REQUEST_QUOTA", "1500"))
 
+    # S3 ingestion: AWS account id that owns our buckets (S7608 — fail closed if unset).
+    S3_EXPECTED_BUCKET_OWNER: str = os.environ.get("S3_EXPECTED_BUCKET_OWNER", "")
+
     def validate(self):
         # Gemini key is always needed for embeddings, regardless of LLM routing.
         if not self.GOOGLE_API_KEY or self.GOOGLE_API_KEY == "CHANGE_ME":

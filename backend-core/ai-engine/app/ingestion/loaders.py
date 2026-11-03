@@ -46,13 +46,21 @@ def _load_scanned_pdf_fallback(file_path: str) -> list[Document]:
 def _download_from_s3(s3_uri: str) -> str:
     import boto3
 
+    expected_owner = settings.S3_EXPECTED_BUCKET_OWNER
+    if not expected_owner:
+        # Fail closed: bucket ownership unverified (S7608).
+        raise RuntimeError("S3_EXPECTED_BUCKET_OWNER is not set; refusing S3 download without bucket-ownership verification.")
+
     parsed = urllib.parse.urlparse(s3_uri)
     bucket, key = parsed.netloc, parsed.path.lstrip("/")
     suffix = "." + key.rsplit(".", 1)[-1] if "." in key else ""
 
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tmp.close()
-    boto3.client("s3").download_file(bucket, key, tmp.name)
+    boto3.client("s3").download_file(
+        bucket, key, tmp.name,
+        ExtraArgs={"ExpectedBucketOwner": expected_owner},
+    )
     return tmp.name
 
 

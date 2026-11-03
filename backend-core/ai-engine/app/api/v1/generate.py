@@ -5,6 +5,7 @@ SOP generation, streaming, comparison, and batch evaluation endpoints.
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 
@@ -44,6 +45,9 @@ class GenerateResponse(BaseModel):
     model_used: str | None = None
 
 
+_SAFE_TOKEN = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")  # log-injection guard (S5145)
+
+
 def _checked_schema(artifact_type: str):
     try:
         return get_schema(artifact_type)
@@ -57,6 +61,8 @@ def _sse(payload) -> str:
 
 @router.post("/generate", response_model=GenerateResponse)
 def generate(req: GenerateRequest):
+    if not _SAFE_TOKEN.fullmatch(req.project_id or "") or not _SAFE_TOKEN.fullmatch(req.artifact_type or ""):
+        raise HTTPException(status_code=400, detail="Invalid project_id or artifact_type")
     schema_cls = _checked_schema(req.artifact_type)
 
     quota_state = record_request()

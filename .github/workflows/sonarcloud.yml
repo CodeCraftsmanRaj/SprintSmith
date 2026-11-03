@@ -90,6 +90,37 @@ jobs:
           open(path, "w").write(xml)
           print("rewrote coverage paths to be repo-relative")
           PY
+      # Generate a fresh ai-engine coverage report for SonarCloud so new ai-engine
+      # lines count toward coverage (without it new_coverage reads 0.0).
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend-core/ai-engine/requirements-dev.txt
+      - name: Install ai-engine test dependencies
+        working-directory: backend-core/ai-engine
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Run ai-engine tests with coverage
+        working-directory: backend-core/ai-engine
+        run: |
+          ./run_tests.sh coverage --cov-report=xml
+      # coverage.py writes filenames relative to the --cov source root (e.g.
+      # "main.py", "api/deps.py"). Rewrite them to be repo-relative so SonarCloud
+      # maps each file onto sonar.sources.
+      - name: Make ai-engine coverage paths repo-relative
+        run: |
+          python - <<'PY'
+          import re
+          path = "backend-core/ai-engine/coverage.xml"
+          prefix = "backend-core/ai-engine/app"
+          xml = open(path).read()
+          xml = re.sub(r"<source>.*?</source>", "<source>.</source>", xml, count=1, flags=re.S)
+          xml = re.sub(r'filename="', f'filename="{prefix}/', xml)
+          open(path, "w").write(xml)
+          print("rewrote ai-engine coverage paths to be repo-relative")
+          PY
       # SonarSource has reported intermittent 403 responses from the scanner
       # binary CDN on GitHub-hosted runners. Retry once so a transient download
       # denial does not fail an otherwise valid analysis.

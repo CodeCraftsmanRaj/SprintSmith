@@ -102,8 +102,10 @@ def test_s3_path_downloads_then_loads(monkeypatch):
     assert docs[0].metadata["source"] == "s3://my-bucket/path/file.pdf"
 
 
-def test_download_from_s3_calls_boto3():
+def test_download_from_s3_calls_boto3(monkeypatch):
     pytest.importorskip("boto3")
+    from app.config import settings
+    monkeypatch.setattr(settings, "S3_EXPECTED_BUCKET_OWNER", "123456789012")
     mock_s3 = MagicMock()
     mock_client = MagicMock()
     mock_s3.client.return_value = mock_client
@@ -117,8 +119,21 @@ def test_download_from_s3_calls_boto3():
         from app.ingestion.loaders import _download_from_s3
         result = _download_from_s3("s3://bucket/key.pdf")
 
-    mock_client.download_file.assert_called_once_with("bucket", "key.pdf", "/tmp/test.pdf")
+    mock_client.download_file.assert_called_once_with(
+        "bucket", "key.pdf", "/tmp/test.pdf",
+        ExtraArgs={"ExpectedBucketOwner": "123456789012"},
+    )
     assert result == "/tmp/test.pdf"
+
+
+def test_download_from_s3_requires_expected_bucket_owner(monkeypatch):
+    pytest.importorskip("boto3")
+    from app.config import settings
+    monkeypatch.setattr(settings, "S3_EXPECTED_BUCKET_OWNER", "")
+
+    from app.ingestion.loaders import _download_from_s3
+    with pytest.raises(RuntimeError, match="S3_EXPECTED_BUCKET_OWNER"):
+        _download_from_s3("s3://bucket/key.pdf")
 
 
 def test_scanned_pdf_fallback_for_empty_extraction(monkeypatch, tmp_path):

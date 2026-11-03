@@ -114,3 +114,13 @@ def test_unknown_artifact_type_400():
         resp = client.post(path, json={"project_id": "p1", "artifact_type": "nope",
                                        "requirement_text": "x"})
         assert resp.status_code == 400, path
+
+
+def test_invalid_project_id_400():
+    client = TestClient(app)
+    # Only the sync /generate endpoint validates the token up front (S5145 log
+    # injection guard); /generate/stream and /generate/compare delegate to the
+    # graph and surface upstream errors instead.
+    resp = client.post("/generate", json={"project_id": "../etc/passwd", "artifact_type": "user_story",
+                                          "requirement_text": "x"})
+    assert resp.status_code == 400
