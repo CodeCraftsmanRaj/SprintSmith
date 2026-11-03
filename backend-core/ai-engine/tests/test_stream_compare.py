@@ -114,3 +114,11 @@ def test_unknown_artifact_type_400():
         resp = client.post(path, json={"project_id": "p1", "artifact_type": "nope",
                                        "requirement_text": "x"})
         assert resp.status_code == 400, path
+
+
+def test_invalid_project_id_400():
+    client = TestClient(app)
+    for path in ("/generate", "/generate/stream", "/generate/compare"):
+        resp = client.post(path, json={"project_id": "../etc/passwd", "artifact_type": "user_story",
+                                       "requirement_text": "x"})
+        assert resp.status_code == 400, path
