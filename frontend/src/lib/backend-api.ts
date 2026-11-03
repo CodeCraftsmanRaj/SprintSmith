@@ -1,6 +1,7 @@
 const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:8002").replace(/\/$/, "");
 
 export type Project = { id: string; name: string; description: string; created_at: string };
+export type ProjectMonitoringDashboard = { available: boolean; dashboard_url: string | null; message: string | null };
 export type Requirement = { id: string; filename: string; doc_type: string; chunks_indexed: number; created_at: string; content?: string };
 export type Artifact = { id: string; artifact_type: string; title: string; content: Record<string, unknown>; version: number; created_at: string };
 export type User = { id: string; email: string; full_name: string; role: string };

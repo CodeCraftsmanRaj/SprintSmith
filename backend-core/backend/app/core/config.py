@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     # ── External Services ───────────────────────────────────────────────────
     ai_engine_url: str = "http://localhost:8001"
+    grafana_root_url: str | None = None
+    grafana_dashboard_uid: str = "sprintsmith-api"
 
     # ── File Storage ────────────────────────────────────────────────────────
     upload_dir: str = "./var/uploads"
