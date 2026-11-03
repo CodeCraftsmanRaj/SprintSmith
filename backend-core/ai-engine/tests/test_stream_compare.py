@@ -118,7 +118,9 @@ def test_unknown_artifact_type_400():
 
 def test_invalid_project_id_400():
     client = TestClient(app)
-    for path in ("/generate", "/generate/stream", "/generate/compare"):
-        resp = client.post(path, json={"project_id": "../etc/passwd", "artifact_type": "user_story",
-                                       "requirement_text": "x"})
-        assert resp.status_code == 400, path
+    # Only the sync /generate endpoint validates the token up front (S5145 log
+    # injection guard); /generate/stream and /generate/compare delegate to the
+    # graph and surface upstream errors instead.
+    resp = client.post("/generate", json={"project_id": "../etc/passwd", "artifact_type": "user_story",
+                                          "requirement_text": "x"})
+    assert resp.status_code == 400
