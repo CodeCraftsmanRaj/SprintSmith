@@ -9,6 +9,8 @@ from app.ports.ai_engine_port import AIEnginePort
 
 logger = logging.getLogger("sprintsmith.backend.ai_client")
 _SAFE_API_PATH = re.compile(r"/(?:[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*)\Z")
+_TRANSIENT_UPSTREAM_STATUSES = {500, 502, 503, 504}
+_RETRYABLE_GENERATION_PATHS = {"/generate", "/generate/compare"}
 
 
 class AIEngineClient(AIEnginePort):
@@ -25,12 +27,36 @@ class AIEngineClient(AIEnginePort):
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.request(method, f"{self.base_url}{path}", **kwargs)
-                response.raise_for_status()
-                return response.json()
+                for attempt in range(2):
+                    response = await client.request(method, f"{self.base_url}{path}", **kwargs)
+                    if (
+                        attempt == 0
+                        and path in _RETRYABLE_GENERATION_PATHS
+                        and response.status_code in _TRANSIENT_UPSTREAM_STATUSES
+                    ):
+                        logger.warning(
+                            "AI engine returned transient HTTP %s for %s; retrying generation once",
+                            response.status_code,
+                            path,
+                        )
+                        await asyncio.sleep(0.25)
+                        continue
+                    response.raise_for_status()
+                    return response.json()
         except httpx.HTTPStatusError as exc:
-            detail = exc.response.text[:1000]
-            raise HTTPException(status_code=502, detail=f"AI engine returned {exc.response.status_code}: {detail}") from exc
+            upstream_status = exc.response.status_code
+            logger.error("AI engine request to %s failed with HTTP %s", path, upstream_status)
+            if upstream_status >= 500:
+                detail = (
+                    "AI engine is temporarily unavailable "
+                    f"(upstream status {upstream_status}). Please try again shortly."
+                )
+            else:
+                detail = (
+                    f"AI engine rejected the request (upstream status {upstream_status}). "
+                    "Please review the artifact details and try again."
+                )
+            raise HTTPException(status_code=502, detail=detail) from exc
         except httpx.RequestError as exc:
             raise HTTPException(status_code=503, detail="AI engine is unavailable") from exc
         except ValueError as exc:
