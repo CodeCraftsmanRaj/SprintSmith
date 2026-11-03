@@ -76,7 +76,8 @@ def generate(req: GenerateRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=f"LLM generation failed validation: {e}")
     except Exception as e:
-        logger.exception("Generation failed for project_id=%s artifact_type=%s", req.project_id, req.artifact_type)
+        # request_id is server-generated (uuid4), not user-controlled — safe to log.
+        logger.exception("Generation failed for request_id=%s", request_id)
         raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
 
     latency_ms = int((time.monotonic() - start) * 1000)
