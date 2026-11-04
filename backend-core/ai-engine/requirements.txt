@@ -9,7 +9,7 @@ python-multipart==0.0.9
 # All stay inside the 0.3.x series (pydantic 2.9.2 compatible); verified by full test suite.
 langchain==0.3.30
 langchain-core==0.3.86
-langchain-community==0.3.31
+langchain-community==0.3.21
 langchain-postgres==0.0.12
 langchain-google-genai==2.0.4
 langchain-groq==0.2.1           # Primary LLM provider (generation). Needs langchain-core>=0.3.15,<0.4
@@ -23,7 +23,7 @@ docling==2.15.1                # Structure-aware PDF/DOCX parsing (headings, tab
 docling-core>=2.14,<2.15       # Compatible with docling 2.15; 2.13.1 is no longer published for current Python images
 docling-ibm-models==3.1.0      # Coupled pin: 3.15 requires docling-core>=2.33
 docling-parse==3.0.0           # Coupled pin: 3.4 requires docling-core>=2.14
-numpy>=1.26.0                  # langchain-community requires numpy<2; docling would otherwise upgrade it
+numpy==1.26.4                  # langchain-community requires numpy<2; docling would otherwise upgrade it
 opencv-python-headless==4.10.0.84  # easyocr (via docling) leaves this unbounded; 5.x requires numpy>=2
 unstructured>=0.18.0
 pypdf>=5.0.0
