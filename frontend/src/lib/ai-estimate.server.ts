@@ -5,6 +5,7 @@ import { estimateSchema, normalizeEstimate, type Estimate } from "./estimate";
 export class AiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
+    this.name = "AiError";
   }
 }
 
