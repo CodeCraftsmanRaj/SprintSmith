@@ -18,6 +18,7 @@ def test_all_artifact_types_have_a_prompt_and_a_schema():
 
 @pytest.mark.parametrize("artifact_type", list(SCHEMA_REGISTRY.keys()))
 def test_prompt_loads_and_has_required_placeholders(artifact_type):
+def test_prompt_loads_and_has_required_placeholders(artifact_type):
     prompt, version_id = load_prompt(artifact_type)
     assert version_id.startswith(artifact_type)
     rendered = prompt.format(
@@ -30,14 +31,15 @@ def test_prompt_loads_and_has_required_placeholders(artifact_type):
     # Check for substituted value OR literal placeholder (CI/Python version compat)
     has_requirement = "dummy requirement" in rendered or "{requirement}" in rendered
     has_context = "dummy context" in rendered or "{context}" in rendered
-    assert has_requirement, (
-        f"Expected 'dummy requirement' or }requirement} in rendered output, "
-        f"got: {rendered[:100]}"
-    )
-    assert has_context, (
-        f"Expected 'dummy context' or }context} in rendered output, "
-        f"got: {rendered[:100]}"
-    )
+    if not has_requirement:
+        raise AssertionError(
+            "Expected 'dummy requirement' or {requirement} in rendered output"
+        )
+    if not has_context:
+        raise AssertionError(
+            "Expected 'dummy context' or {context} in rendered output"
+        )
+        )
 
 
 def test_get_schema_unknown_type_raises():
