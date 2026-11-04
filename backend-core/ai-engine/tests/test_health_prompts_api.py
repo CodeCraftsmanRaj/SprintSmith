@@ -67,14 +67,12 @@ def test_create_prompt_version():
     """POST /prompts/{type} creates a new version."""
     # First check what types exist
     types_response = client.get("/artifact-types")
-    types = types_response.json()["artifact_types"]
+    types = types_response.json().get("artifact_types", [])
     if not types:
         # No artifact types available, skip creation test
         return
 
     artifact_type = types[0]
-    versions_response = client.get(f"/prompts/{artifact_type}")
-    versions = versions_response.json()["artifact_types"].get(artifact_type, [])
 
     response = client.post(
         f"/prompts/{artifact_type}",

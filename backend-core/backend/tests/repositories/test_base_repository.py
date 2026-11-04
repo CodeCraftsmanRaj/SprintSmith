@@ -6,8 +6,17 @@ Verifies all base CRUD operations:
 """
 
 import uuid
-from app.domain.models import Project
+from app.domain.models import Project, User
 from app.repositories.base import BaseRepository
+
+
+def _create_user(db_session, user_id="user-1", email="user-1@example.com"):
+    """Create a user so project owner_id FK constraint is satisfied."""
+    user = User(id=user_id, email=email, full_name="Test User",
+                password_hash="hashed", role="member")
+    db_session.add(user)
+    db_session.commit()
+    return user
 
 
 def test_base_repository_new_id(db_session):
@@ -21,6 +30,7 @@ def test_base_repository_new_id(db_session):
 
 def test_base_repository_add_and_get(db_session):
     """Add an entity and retrieve it by ID."""
+    _create_user(db_session)
     repo = BaseRepository(db_session, Project)
     project_id = repo.new_id()
     project = Project(id=project_id, name="Test Project", owner_id="user-1")
@@ -35,6 +45,7 @@ def test_base_repository_add_and_get(db_session):
 
 def test_base_repository_delete(db_session):
     """Delete an entity and confirm it is gone."""
+    _create_user(db_session)
     repo = BaseRepository(db_session, Project)
     project_id = repo.new_id()
     project = Project(id=project_id, name="To Delete", owner_id="user-1")
@@ -49,6 +60,7 @@ def test_base_repository_delete(db_session):
 
 def test_base_repository_flush(db_session):
     """flush() persists to DB without ending the transaction."""
+    _create_user(db_session)
     repo = BaseRepository(db_session, Project)
     project = Project(id=repo.new_id(), name="Flush Test", owner_id="user-1")
     repo.add(project)
@@ -64,6 +76,7 @@ def test_base_repository_flush(db_session):
 
 def test_base_repository_rollback(db_session):
     """rollback() discards uncommitted changes."""
+    _create_user(db_session)
     repo = BaseRepository(db_session, Project)
     project = Project(id=repo.new_id(), name="Rollback Test", owner_id="user-1")
     repo.add(project)
@@ -80,6 +93,7 @@ def test_base_repository_rollback(db_session):
 
 def test_base_repository_refresh(db_session):
     """refresh() reloads entity state from the database."""
+    _create_user(db_session)
     repo = BaseRepository(db_session, Project)
     project_id = repo.new_id()
     project = Project(id=project_id, name="Original", owner_id="user-1")
