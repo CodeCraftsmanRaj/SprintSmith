@@ -30,6 +30,7 @@ function createPreviewStorage() {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   Object.defineProperty(window, "parent", { configurable: true, value: window });
   localStorage.clear();
@@ -92,5 +93,18 @@ describe("brokered preview auth storage", () => {
     });
     Object.defineProperty(window, "parent", { configurable: true, value: { postMessage: vi.fn() } });
     expect(brokeredPreviewStorage()).toBe(localStorage);
+  });
+
+  it("retries once when the editor does not answer the initial session request", async () => {
+    vi.useFakeTimers();
+    const { storage, postMessage, answerNext } = createPreviewStorage();
+    const reading = storage.getItem("session");
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    await answerNext("session-from-retry");
+    await expect(reading).resolves.toBe("session-from-retry");
   });
 });
