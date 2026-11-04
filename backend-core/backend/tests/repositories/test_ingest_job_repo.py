@@ -7,12 +7,24 @@ Verifies:
 - CRUD operations via BaseRepository
 """
 
-from app.domain.models import IngestJob
+from app.domain.models import IngestJob, Requirement
 from app.repositories.ingest_job_repo import IngestJobRepository
 
 
-def test_ingest_job_repo_get_by_requirement(ingest_job_repo):
+def _create_requirement(db_session, ingest_job_repo, requirement_id="req-1"):
+    """Create parent Requirement so FK constraint is satisfied."""
+    req = Requirement(
+        id=requirement_id, project_id="proj-1", uploaded_by="user-1",
+        filename="test.txt", file_path="/tmp/test.txt", content="",
+        doc_type="requirement", chunks_indexed=0,
+    )
+    db_session.add(req)
+    db_session.commit()
+
+
+def test_ingest_job_repo_get_by_requirement(db_session, ingest_job_repo):
     """Ingest jobs are returned for a specific requirement, newest first."""
+    _create_requirement(db_session, ingest_job_repo)
     req_id = "req-1"
 
     j1 = IngestJob(
@@ -38,8 +50,13 @@ def test_ingest_job_repo_get_by_requirement(ingest_job_repo):
     assert results[1].id == "job-1"
 
 
-def test_ingest_job_repo_get_pending(ingest_job_repo):
+def test_ingest_job_repo_get_pending(db_session, ingest_job_repo):
     """Only jobs with status 'processing' are returned."""
+    _create_requirement(db_session, ingest_job_repo, requirement_id="r1")
+    _create_requirement(db_session, ingest_job_repo, requirement_id="r2")
+    _create_requirement(db_session, ingest_job_repo, requirement_id="r3")
+    _create_requirement(db_session, ingest_job_repo, requirement_id="r4")
+
     j1 = IngestJob(id="j1", requirement_id="r1", status="processing", chunks_indexed=0)
     j2 = IngestJob(id="j2", requirement_id="r2", status="done", chunks_indexed=5)
     j3 = IngestJob(id="j3", requirement_id="r3", status="processing", chunks_indexed=0)
@@ -56,8 +73,9 @@ def test_ingest_job_repo_get_pending(ingest_job_repo):
     assert ids == {"j1", "j3"}
 
 
-def test_ingest_job_repo_crud(ingest_job_repo):
+def test_ingest_job_repo_crud(db_session, ingest_job_repo):
     """BaseRepository CRUD operations work on IngestJob."""
+    _create_requirement(db_session, ingest_job_repo)
     job_id = ingest_job_repo.new_id()
     job = IngestJob(
         id=job_id, requirement_id="req-1", engine_job_id="eng-1",

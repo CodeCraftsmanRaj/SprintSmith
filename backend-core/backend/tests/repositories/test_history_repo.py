@@ -10,14 +10,29 @@ Verifies:
 - CRUD operations via BaseRepository
 """
 
-from app.domain.models import GenerationHistory, User
+from app.domain.models import Artifact, GenerationHistory, Project, User
 from app.repositories.history_repo import GenerationHistoryRepository
 
 
-def test_history_repo_list_for_project(history_repo, dev_user):
+def _create_project_and_artifact(db_session, history_repo):
+    """Create parent Project, User, and Artifact so FK constraints are satisfied."""
+    user = User(id="user-1", email="user-1@example.com", full_name="Test User",
+                password_hash="hashed", role="member")
+    db_session.add(user)
+    project = Project(id="proj-1", name="Test Project", owner_id="user-1")
+    db_session.add(project)
+    artifact = Artifact(id="art-1", project_id="proj-1", created_by="user-1",
+                        artifact_type="user_story", title="Test Artifact",
+                        content={"key": "value"}, version=1)
+    db_session.add(artifact)
+    db_session.commit()
+
+
+def test_history_repo_list_for_project(db_session, history_repo):
     """Generation history entries are returned for a project, newest first."""
+    _create_project_and_artifact(db_session, history_repo)
     project_id = "proj-1"
-    user_id = dev_user.id
+    user_id = "user-1"
 
     h1 = GenerationHistory(
         id="h1", project_id=project_id, artifact_id="a1", user_id=user_id,
@@ -51,10 +66,11 @@ def test_history_repo_list_for_project(history_repo, dev_user):
     assert results[1].id == "h1"
 
 
-def test_history_repo_list_chronological_for_project(history_repo, dev_user):
+def test_history_repo_list_chronological_for_project(db_session, history_repo):
     """Chronological listing returns oldest first."""
+    _create_project_and_artifact(db_session, history_repo)
     project_id = "proj-1"
-    user_id = dev_user.id
+    user_id = "user-1"
 
     h1 = GenerationHistory(
         id="h1", project_id=project_id, artifact_id="a1", user_id=user_id,
@@ -80,9 +96,10 @@ def test_history_repo_list_chronological_for_project(history_repo, dev_user):
     assert results[1].id == "h2"
 
 
-def test_history_repo_get_for_artifact(history_repo, dev_user):
+def test_history_repo_get_for_artifact(db_session, history_repo):
     """Get a single history entry for a specific artifact."""
-    user_id = dev_user.id
+    _create_project_and_artifact(db_session, history_repo)
+    user_id = "user-1"
     h = GenerationHistory(
         id="h1", project_id="proj-1", artifact_id="art-1", user_id=user_id,
         engine_request_id="er-1", artifact_type="user_story",
@@ -102,10 +119,11 @@ def test_history_repo_get_for_artifact(history_repo, dev_user):
     assert not_found is None
 
 
-def test_history_repo_stats_for_project(history_repo, dev_user):
+def test_history_repo_stats_for_project(db_session, history_repo):
     """Stats computes total, by_type, and avg_eval_score correctly."""
+    _create_project_and_artifact(db_session, history_repo)
     project_id = "proj-1"
-    user_id = dev_user.id
+    user_id = "user-1"
 
     h1 = GenerationHistory(
         id="h1", project_id=project_id, artifact_id="a1", user_id=user_id,
@@ -136,23 +154,24 @@ def test_history_repo_stats_for_project(history_repo, dev_user):
     stats = history_repo.stats_for_project(project_id)
     assert stats["total_generations"] == 3
     assert stats["by_type"] == {"user_story": 2, "task": 1}
-    # avg: (0.9 + 0.7) / 2 = 0.8
     assert abs(stats["avg_eval_score"] - 0.8) < 0.001
 
 
-def test_history_repo_stats_empty_project(history_repo):
+def test_history_repo_stats_empty_project(db_session, history_repo):
     """Stats for a project with no generations returns zeros."""
+    _create_project_and_artifact(db_session, history_repo)
     stats = history_repo.stats_for_project("empty-proj")
     assert stats["total_generations"] == 0
     assert stats["by_type"] == {}
     assert stats["avg_eval_score"] is None
 
 
-def test_history_repo_crud(history_repo, dev_user):
+def test_history_repo_crud(db_session, history_repo):
     """BaseRepository CRUD operations work on GenerationHistory."""
+    _create_project_and_artifact(db_session, history_repo)
     hist_id = history_repo.new_id()
     history = GenerationHistory(
-        id=hist_id, project_id="proj-1", artifact_id="a1", user_id=dev_user.id,
+        id=hist_id, project_id="proj-1", artifact_id="a1", user_id="user-1",
         engine_request_id="er-1", artifact_type="user_story",
         prompt_version="v1", usage={}, latency_ms=100,
         requirement_text="req", eval_score=0.5, retry_count=0,

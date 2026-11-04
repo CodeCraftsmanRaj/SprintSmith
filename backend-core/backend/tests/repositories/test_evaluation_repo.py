@@ -8,14 +8,27 @@ Verifies:
 - CRUD operations via BaseRepository
 """
 
-from app.domain.models import Evaluation, User
+from app.domain.models import Artifact, Evaluation, User
 from app.repositories.evaluation_repo import EvaluationRepository
 
 
-def test_evaluation_repo_list_for_artifact(evaluation_repo, dev_user):
+def _create_artifact_and_user(db_session, evaluation_repo, artifact_id="artifact-1"):
+    """Create parent Artifact and User so FK constraints are satisfied."""
+    user = User(id="user-1", email="user-1@example.com", full_name="Test User",
+                password_hash="hashed", role="member")
+    db_session.add(user)
+    artifact = Artifact(id=artifact_id, project_id="proj-1", created_by="user-1",
+                        artifact_type="user_story", title="Test Artifact",
+                        content={"key": "value"}, version=1)
+    db_session.add(artifact)
+    db_session.commit()
+
+
+def test_evaluation_repo_list_for_artifact(db_session, evaluation_repo):
     """Evaluations are returned for a specific artifact, newest first."""
+    _create_artifact_and_user(db_session, evaluation_repo)
     artifact_id = "artifact-1"
-    user_id = dev_user.id
+    user_id = "user-1"
 
     e1 = Evaluation(
         id="eval-1", artifact_id=artifact_id, user_id=user_id,
@@ -36,14 +49,20 @@ def test_evaluation_repo_list_for_artifact(evaluation_repo, dev_user):
 
     results = evaluation_repo.list_for_artifact(artifact_id)
     assert len(results) == 2
-    # Newest first: eval-2 was added after eval-1
     assert results[0].id == "eval-2"
     assert results[1].id == "eval-1"
 
 
-def test_evaluation_repo_avg_score_for_artifact_ids(evaluation_repo, dev_user):
+def test_evaluation_repo_avg_score_for_artifact_ids(db_session, evaluation_repo):
     """Average score is computed across the given artifact IDs."""
-    user_id = dev_user.id
+    _create_artifact_and_user(db_session, evaluation_repo, artifact_id="a1")
+    # Also create artifact a2
+    artifact_a2 = Artifact(id="a2", project_id="proj-1", created_by="user-1",
+                           artifact_type="user_story", title="Artifact 2",
+                           content={"key": "value"}, version=1)
+    db_session.add(artifact_a2)
+    db_session.commit()
+    user_id = "user-1"
 
     e1 = Evaluation(id="e1", artifact_id="a1", user_id=user_id, score=4, metrics={})
     e2 = Evaluation(id="e2", artifact_id="a1", user_id=user_id, score=2, metrics={})
@@ -53,11 +72,9 @@ def test_evaluation_repo_avg_score_for_artifact_ids(evaluation_repo, dev_user):
     evaluation_repo.add(e3)
     evaluation_repo.commit()
 
-    # a1 average: (4 + 2) / 2 = 3.0
     avg = evaluation_repo.avg_score_for_artifact_ids(["a1"])
     assert avg == 3.0
 
-    # Both artifacts: (4 + 2 + 5) / 3 = 3.666...
     avg_all = evaluation_repo.avg_score_for_artifact_ids(["a1", "a2"])
     assert abs(avg_all - 3.667) < 0.001
 
@@ -68,17 +85,19 @@ def test_evaluation_repo_avg_score_empty_list(evaluation_repo):
     assert avg is None
 
 
-def test_evaluation_repo_avg_score_no_evaluations(evaluation_repo):
+def test_evaluation_repo_avg_score_no_evaluations(db_session, evaluation_repo):
     """Artifact IDs with no evaluations returns None."""
+    _create_artifact_and_user(db_session, evaluation_repo, artifact_id="nonexistent")
     avg = evaluation_repo.avg_score_for_artifact_ids(["nonexistent"])
     assert avg is None
 
 
-def test_evaluation_repo_crud(evaluation_repo, dev_user):
+def test_evaluation_repo_crud(db_session, evaluation_repo):
     """BaseRepository CRUD operations work on Evaluation."""
+    _create_artifact_and_user(db_session, evaluation_repo, artifact_id="art-1")
     eval_id = evaluation_repo.new_id()
     evaluation = Evaluation(
-        id=eval_id, artifact_id="art-1", user_id=dev_user.id,
+        id=eval_id, artifact_id="art-1", user_id="user-1",
         score=4, feedback="nice job", metrics={"x": 1},
     )
     evaluation_repo.add(evaluation)
