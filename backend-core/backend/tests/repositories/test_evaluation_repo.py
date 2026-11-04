@@ -8,15 +8,17 @@ Verifies:
 - CRUD operations via BaseRepository
 """
 
-from app.domain.models import Artifact, Evaluation, User
+from app.domain.models import Artifact, Evaluation, Project, User
 from app.repositories.evaluation_repo import EvaluationRepository
 
 
 def _create_artifact_and_user(db_session, evaluation_repo, artifact_id="artifact-1"):
-    """Create parent Artifact and User so FK constraints are satisfied."""
+    """Create parent Project, User, and Artifact so FK constraints are satisfied."""
     user = User(id="user-1", email="user-1@example.com", full_name="Test User",
                 password_hash="hashed", role="member")
     db_session.add(user)
+    project = Project(id="proj-1", name="Test Project", owner_id="user-1")
+    db_session.add(project)
     artifact = Artifact(id=artifact_id, project_id="proj-1", created_by="user-1",
                         artifact_type="user_story", title="Test Artifact",
                         content={"key": "value"}, version=1)
