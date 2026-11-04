@@ -86,6 +86,74 @@ async def test_create_ingest_job_file_too_large(db_session, dev_user, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_create_ingest_job_rejects_resolved_path_outside_upload_root(
+    db_session, dev_user, tmp_path, monkeypatch
+):
+    upload_dir = tmp_path / "uploads"
+    original_resolve = Path.resolve
+
+    def resolve_outside_upload(path, *args, **kwargs):
+        resolved = original_resolve(path, *args, **kwargs)
+        if path.suffix == ".txt" and path.parent == upload_dir:
+            return tmp_path / "outside.txt"
+        return resolved
+
+    monkeypatch.setattr(Path, "resolve", resolve_outside_upload)
+
+    with pytest.raises(HTTPException) as exc:
+        await create_ingest_job(
+            db=db_session,
+            project_id="proj-1",
+            user=dev_user,
+            data=b"content",
+            filename="requirements.txt",
+            doc_type="requirement",
+            upload_dir=str(upload_dir),
+        )
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "Invalid upload path"
+
+
+@pytest.mark.asyncio
+async def test_create_ingest_job_rejects_path_outside_root_with_prefix_guard(
+    db_session, dev_user, tmp_path, monkeypatch
+):
+    upload_dir = tmp_path / "uploads"
+    outside_file = tmp_path / "outside.txt"
+    original_resolve = Path.resolve
+    original_relative_to = Path.relative_to
+
+    def resolve_outside_upload(path, *args, **kwargs):
+        resolved = original_resolve(path, *args, **kwargs)
+        if path.suffix == ".txt" and path.parent == upload_dir:
+            return outside_file
+        return resolved
+
+    def allow_relative_for_guard_test(path, other, *args, **kwargs):
+        if path == outside_file and other == upload_dir:
+            return Path("synthetic-relative-path")
+        return original_relative_to(path, other, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve_outside_upload)
+    monkeypatch.setattr(Path, "relative_to", allow_relative_for_guard_test)
+
+    with pytest.raises(HTTPException) as exc:
+        await create_ingest_job(
+            db=db_session,
+            project_id="proj-1",
+            user=dev_user,
+            data=b"content",
+            filename="requirements.txt",
+            doc_type="requirement",
+            upload_dir=str(upload_dir),
+        )
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "Path escapes upload directory"
+
+
+@pytest.mark.asyncio
 async def test_create_ingest_job_engine_failure_cleans_up(db_session, dev_user, tmp_path, monkeypatch):
     """Engine ingest failure removes the uploaded file and re-raises."""
     async def failing_ingest(self, file_path, project_id, doc_type="requirement", doc_id=None):

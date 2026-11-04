@@ -1,7 +1,10 @@
 from urllib.parse import parse_qs, urlsplit
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
+from app.services import grafana_dashboard
 from app.services.grafana_dashboard import project_grafana_dashboard
 
 
@@ -44,6 +47,24 @@ def test_missing_root_url_returns_actionable_unavailable_state(root_url):
 )
 def test_rejects_unsafe_or_invalid_dashboard_configuration(project_id, root_url, uid):
     result = project_grafana_dashboard(project_id, root_url, uid)
+
+    assert result.available is False
+    assert result.dashboard_url is None
+    assert "settings are invalid" in result.message
+
+
+def test_rejects_a_dashboard_url_that_fails_final_validation(monkeypatch):
+    adapter = SimpleNamespace(
+        validate_python=Mock(
+            side_effect=[
+                "https://grafana.example.com",
+                "javascript://untrusted.example",
+            ],
+        ),
+    )
+    monkeypatch.setattr(grafana_dashboard, "_HTTP_URL", adapter)
+
+    result = project_grafana_dashboard("project-1", "https://grafana.example.com", "dashboard")
 
     assert result.available is False
     assert result.dashboard_url is None
