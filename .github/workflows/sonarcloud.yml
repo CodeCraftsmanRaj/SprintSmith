@@ -59,7 +59,7 @@ jobs:
       # coverage.xml are repo-relative and map onto sonar.sources.
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: backend-core/backend/requirements-dev.txt
       - name: Install backend test dependencies
@@ -94,7 +94,7 @@ jobs:
       # lines count toward coverage (without it new_coverage reads 0.0).
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: backend-core/ai-engine/requirements-dev.txt
       - name: Install ai-engine test dependencies
