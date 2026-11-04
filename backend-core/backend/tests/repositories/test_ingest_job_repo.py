@@ -25,6 +25,38 @@ def test_ingest_job_repo_get_by_requirement(db_session, ingest_job_repo, project
     db_session.add(requirement)
     db_session.commit()
 
+    req1 = Requirement(
+        id=ingest_job_repo.new_id(), project_id=project.id, uploaded_by=dev_user.id,
+        filename="r1.txt", file_path="/tmp/r1.txt", content="",
+        doc_type="requirement", chunks_indexed=0,
+    )
+    db_session.add(req1)
+    db_session.commit()
+
+    req2 = Requirement(
+        id=ingest_job_repo.new_id(), project_id=project.id, uploaded_by=dev_user.id,
+        filename="r2.txt", file_path="/tmp/r2.txt", content="",
+        doc_type="requirement", chunks_indexed=0,
+    )
+    db_session.add(req2)
+    db_session.commit()
+
+    req3 = Requirement(
+        id=ingest_job_repo.new_id(), project_id=project.id, uploaded_by=dev_user.id,
+        filename="r3.txt", file_path="/tmp/r3.txt", content="",
+        doc_type="requirement", chunks_indexed=0,
+    )
+    db_session.add(req3)
+    db_session.commit()
+
+    req4 = Requirement(
+        id=ingest_job_repo.new_id(), project_id=project.id, uploaded_by=dev_user.id,
+        filename="r4.txt", file_path="/tmp/r4.txt", content="",
+        doc_type="requirement", chunks_indexed=0,
+    )
+    db_session.add(req4)
+    db_session.commit()
+
     j1 = IngestJob(
         id=ingest_job_repo.new_id(), requirement_id=requirement.id, engine_job_id="eng-1",
         status="done", chunks_indexed=10,
@@ -34,12 +66,17 @@ def test_ingest_job_repo_get_by_requirement(db_session, ingest_job_repo, project
         status="processing", chunks_indexed=0,
     )
     j3 = IngestJob(
-        id=ingest_job_repo.new_id(), requirement_id="other-req", engine_job_id="eng-3",
+        id=ingest_job_repo.new_id(), requirement_id=req3.id, engine_job_id="eng-3",
+        status="done", chunks_indexed=5,
+    )
+    j4 = IngestJob(
+        id=ingest_job_repo.new_id(), requirement_id=req4.id, engine_job_id="eng-4",
         status="done", chunks_indexed=5,
     )
     ingest_job_repo.add(j1)
     ingest_job_repo.add(j2)
     ingest_job_repo.add(j3)
+    ingest_job_repo.add(j4)
     ingest_job_repo.commit()
 
     results = ingest_job_repo.get_by_requirement(requirement.id)

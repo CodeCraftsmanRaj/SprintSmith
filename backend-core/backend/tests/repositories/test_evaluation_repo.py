@@ -41,8 +41,16 @@ def test_evaluation_repo_list_for_artifact(db_session, evaluation_repo, project_
         id=evaluation_repo.new_id(), artifact_id=artifact_id, user_id=user_id,
         score=3, feedback="ok", metrics={"b": 2},
     )
+    artifact_other = Artifact(
+        id=artifact_repo.new_id(), project_id=project.id, created_by=dev_user.id,
+        artifact_type="user_story", title="Other Artifact",
+        content={"key": "value"}, version=1,
+    )
+    artifact_repo.add(artifact_other)
+    artifact_repo.commit()
+
     e3 = Evaluation(
-        id=evaluation_repo.new_id(), artifact_id="other-artifact", user_id=user_id,
+        id=evaluation_repo.new_id(), artifact_id=artifact_other.id, user_id=user_id,
         score=4, feedback="other", metrics={"c": 3},
     )
     evaluation_repo.add(e1)
