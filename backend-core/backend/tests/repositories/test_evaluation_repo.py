@@ -14,14 +14,14 @@ from app.repositories.evaluation_repo import EvaluationRepository
 
 def _create_artifact_and_user(db_session, evaluation_repo, artifact_id="artifact-1"):
     """Create parent Project, User, and Artifact so FK constraints are satisfied.
-    Flush after each parent to ensure rows exist before children on PostgreSQL."""
+    Commit after each parent entity so PostgreSQL FK constraints pass."""
     user = User(id="user-1", email="user-1@example.com", full_name="Test User",
                 password_hash="hashed", role="member")
     db_session.add(user)
-    db_session.flush()
+    db_session.commit()
     project = Project(id="proj-1", name="Test Project", owner_id="user-1")
     db_session.add(project)
-    db_session.flush()
+    db_session.commit()
     artifact = Artifact(id=artifact_id, project_id="proj-1", created_by="user-1",
                         artifact_type="user_story", title="Test Artifact",
                         content={"key": "value"}, version=1)
