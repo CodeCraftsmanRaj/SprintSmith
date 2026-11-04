@@ -43,7 +43,7 @@ describe("estimateWithAi", () => {
   it("requires an API key", async () => {
     vi.stubEnv("LOVABLE_API_KEY", "");
     await expect(estimateWithAi("Story", "Details")).rejects.toMatchObject({
-      name: "Error",
+      name: "AiError",
       message: "AI is not configured.",
       status: 401,
     });
