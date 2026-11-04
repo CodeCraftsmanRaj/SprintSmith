@@ -48,6 +48,15 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
       expect(text).toContain("Test Category: Unit, Security");
       expect(text).toContain("Number of Test Cases: 4");
     });
+
+    it.each([
+      ["acceptance_criteria", { story: "ST-1", behavior: "Authorize a payment", format: "Gherkin BDD" }, "Output Format: Gherkin BDD"],
+      ["sprint_plan", { goal: "Ship payments", velocity: "20", duration: "2 weeks", stories: "ST-1" }, "Team Velocity: 20"],
+      ["architecture", { system: "Ledger", description: "Track balances", style: "Event-Driven" }, "Architecture Style: Event-Driven"],
+      ["api_spec", { name: "Payments API", endpoints: "POST /payments", auth: "API Key" }, "Authentication Method: API Key"],
+    ] as const)("formats prompt fields for %s", (type, values, expected) => {
+      expect(buildRequirementText(type, values)).toContain(expected);
+    });
   });
 
   describe("Modal Workflow and Wizard Steps", () => {
@@ -207,6 +216,9 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
 
       expect(screen.getByText("AI WORKFLOW · STEP 3 OF 3")).toBeInTheDocument();
       expect(screen.getByText("Review your prompt")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
+      expect(screen.getByText("AI WORKFLOW · STEP 2 OF 3")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /preview prompt/i }));
 
       const previewBlock = screen.getByText(/\[ARTIFACT\]: User Story/);
       expect(previewBlock).toBeInTheDocument();
@@ -222,6 +234,66 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
         "user_story",
         expect.stringContaining("Fraud Detection"),
       );
+    });
+
+    it.each([
+      {
+        type: /acceptance criteria/i,
+        fields: [
+          [/User Story Title/i, "ST-1"],
+          [/Feature Behavior Description/i, "Authorize a payment"],
+          [/Output Format/i, "Gherkin BDD"],
+        ],
+        expected: "Authorize a payment",
+      },
+      {
+        type: /sprint plan/i,
+        fields: [
+          [/Sprint Goal/i, "Ship payments"],
+          [/Team Velocity/i, "20"],
+          [/Sprint Duration/i, "2 weeks"],
+          [/User Stories to Plan/i, "ST-1"],
+        ],
+        expected: "Team Velocity: 20",
+      },
+      {
+        type: /architecture recommendation/i,
+        fields: [
+          [/System \/ Service Name/i, "Ledger"],
+          [/Feature \/ System Description/i, "Track balances"],
+          [/Architecture Style/i, "Event-Driven"],
+        ],
+        expected: "Architecture Style: Event-Driven",
+      },
+      {
+        type: /api specification/i,
+        fields: [
+          [/API Name \/ Purpose/i, "Payments API"],
+          [/Endpoints to Specify/i, "POST /payments"],
+          [/Authentication Method/i, "API Key"],
+        ],
+        expected: "Authentication Method: API Key",
+      },
+    ])("validates and previews the selected artifact form", ({ type, fields, expected }) => {
+      render(
+        <GenerateArtifactModal
+          busy={false}
+          error=""
+          onClose={handleClose}
+          onGenerate={handleGenerate}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: type }));
+      fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+      for (const [label, value] of fields) {
+        fireEvent.change(screen.getByLabelText(label), { target: { value } });
+      }
+
+      const preview = screen.getByRole("button", { name: /preview prompt/i });
+      expect(preview).not.toBeDisabled();
+      fireEvent.click(preview);
+      expect(screen.getByText(new RegExp(expected))).toBeInTheDocument();
     });
 
     it("displays error states including friendly vector retrieval timeout message", () => {
@@ -256,6 +328,26 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
           "Your inputs are still here. Try Generate artifact again in a moment.",
         ),
       ).toBeInTheDocument();
+    });
+
+    it.each([
+      ["AI engine is unavailable.", "The AI engine is temporarily unavailable."],
+      ["AI engine is temporarily unavailable.", "The AI engine is temporarily unavailable."],
+      ["AI engine returned an invalid response.", "The AI engine returned an invalid response."],
+      ["invalid artifact response", "The AI engine returned an invalid response."],
+      ["invalid artifact payload", "The AI engine returned an invalid response."],
+    ])("shows a recovery message for %s", (error, message) => {
+      render(
+        <GenerateArtifactModal
+          busy={false}
+          error={error}
+          onClose={handleClose}
+          onGenerate={handleGenerate}
+        />,
+      );
+
+      expect(screen.getByText(message)).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(`Your prompt is still here\\. ${error}`))).toBeInTheDocument();
     });
 
     it("shows loading state when busy is true", () => {

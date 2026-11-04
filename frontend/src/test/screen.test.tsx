@@ -36,13 +36,36 @@ describe("Screen component", () => {
     expect(child.parentElement).toHaveAttribute("data-live-slot");
   });
 
+  it("uses the main element or screen container when no first child is available", () => {
+    const { rerender } = render(
+      <Screen html="<main></main>" bodyClass="">
+        <span data-testid="main-fallback">Main fallback</span>
+      </Screen>,
+    );
+    expect(screen.getByTestId("main-fallback").parentElement?.parentElement?.tagName).toBe("MAIN");
+
+    rerender(
+      <Screen html="<div></div>" bodyClass="">
+        <span data-testid="container-fallback">Container fallback</span>
+      </Screen>,
+    );
+    expect(screen.getByTestId("container-fallback").parentElement).toHaveAttribute("data-live-slot");
+  });
+
   it("navigates when clicking an anchor with known data-path", () => {
     const html = `
       <div>
         <a id="link-synthesize" data-path="02-synthesize" href="#">Synthesize</a>
         <a id="link-overview" data-path="overview" href="#">Overview</a>
         <a id="link-plan" data-path="04-plan" href="#">Plan</a>
+        <a id="link-ingest" data-path="01-ingest" href="#">Ingest</a>
+        <a id="link-verify" data-path="03-verify" href="#">Verify</a>
+        <a id="link-prompts" data-path="prompt-library" href="#">Prompts</a>
+        <a id="link-audit" data-path="audit-logs" href="#">Audit</a>
+        <a id="link-login" data-path="login" href="#">Login</a>
         <a id="link-unknown" data-path="unknown-page" href="#">Unknown</a>
+        <a id="link-external" href="/external">External</a>
+        <span id="non-link">Not a link</span>
       </div>
     `;
 
@@ -60,11 +83,27 @@ describe("Screen component", () => {
     fireEvent.click(planLink);
     expect(mockNavigate).toHaveBeenCalledWith({ to: "/plan" });
 
+    for (const [label, path] of [
+      ["Ingest", "/"],
+      ["Verify", "/verify"],
+      ["Prompts", "/prompts"],
+      ["Audit", "/audit"],
+      ["Login", "/login"],
+    ]) {
+      fireEvent.click(screen.getByText(label));
+      expect(mockNavigate).toHaveBeenLastCalledWith({ to: path });
+    }
+
     mockNavigate.mockClear();
     const unknownLink = screen.getByText("Unknown");
-    // Keep jsdom from attempting a real document navigation for the unhandled link.
-    unknownLink.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    screen.getByText("External").addEventListener(
+      "click",
+      (event) => event.preventDefault(),
+      { once: true },
+    );
     fireEvent.click(unknownLink);
+    fireEvent.click(screen.getByText("External"));
+    fireEvent.click(screen.getByText("Not a link"));
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
