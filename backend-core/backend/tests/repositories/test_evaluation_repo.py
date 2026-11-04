@@ -13,12 +13,15 @@ from app.repositories.evaluation_repo import EvaluationRepository
 
 
 def _create_artifact_and_user(db_session, evaluation_repo, artifact_id="artifact-1"):
-    """Create parent Project, User, and Artifact so FK constraints are satisfied."""
+    """Create parent Project, User, and Artifact so FK constraints are satisfied.
+    Flush after each parent to ensure rows exist before children on PostgreSQL."""
     user = User(id="user-1", email="user-1@example.com", full_name="Test User",
                 password_hash="hashed", role="member")
     db_session.add(user)
+    db_session.flush()
     project = Project(id="proj-1", name="Test Project", owner_id="user-1")
     db_session.add(project)
+    db_session.flush()
     artifact = Artifact(id=artifact_id, project_id="proj-1", created_by="user-1",
                         artifact_type="user_story", title="Test Artifact",
                         content={"key": "value"}, version=1)
@@ -58,7 +61,6 @@ def test_evaluation_repo_list_for_artifact(db_session, evaluation_repo):
 def test_evaluation_repo_avg_score_for_artifact_ids(db_session, evaluation_repo):
     """Average score is computed across the given artifact IDs."""
     _create_artifact_and_user(db_session, evaluation_repo, artifact_id="a1")
-    # Also create artifact a2
     artifact_a2 = Artifact(id="a2", project_id="proj-1", created_by="user-1",
                            artifact_type="user_story", title="Artifact 2",
                            content={"key": "value"}, version=1)

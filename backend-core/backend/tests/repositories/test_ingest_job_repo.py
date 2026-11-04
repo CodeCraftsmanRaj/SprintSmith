@@ -16,6 +16,7 @@ def _create_project_and_user(db_session):
     user = User(id="user-1", email="user-1@example.com", full_name="Test User",
                 password_hash="hashed", role="member")
     db_session.add(user)
+    db_session.flush()
     project = Project(id="proj-1", name="Test Project", owner_id="user-1")
     db_session.add(project)
     db_session.commit()

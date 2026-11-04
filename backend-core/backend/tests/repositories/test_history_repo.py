@@ -15,12 +15,15 @@ from app.repositories.history_repo import GenerationHistoryRepository
 
 
 def _create_project_and_artifact(db_session, history_repo):
-    """Create parent Project, User, and Artifact so FK constraints are satisfied."""
+    """Create parent Project, User, and Artifact so FK constraints are satisfied.
+    Flush after each parent to ensure rows exist before children on PostgreSQL."""
     user = User(id="user-1", email="user-1@example.com", full_name="Test User",
                 password_hash="hashed", role="member")
     db_session.add(user)
+    db_session.flush()
     project = Project(id="proj-1", name="Test Project", owner_id="user-1")
     db_session.add(project)
+    db_session.flush()
     artifact = Artifact(id="art-1", project_id="proj-1", created_by="user-1",
                         artifact_type="user_story", title="Test Artifact",
                         content={"key": "value"}, version=1)
