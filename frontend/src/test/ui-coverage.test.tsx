@@ -17,7 +17,7 @@ import { NavigationMenu, NavigationMenuItem, NavigationMenuLink, NavigationMenuL
 import { Drawer, DrawerContent, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar, SidebarContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { ChartContainer } from "@/components/ui/chart";
+import { ChartContainer, ChartLegendContent, ChartTooltipContent } from "@/components/ui/chart";
 import { Bar, BarChart, XAxis } from "recharts";
 
 vi.mock("embla-carousel-react", () => {
@@ -117,6 +117,21 @@ describe("uncovered UI wrappers", () => {
     </>);
     expect(screen.getByText("Projects")).toBeInTheDocument();
     expect(screen.getByTestId("chart")).toHaveAttribute("data-chart");
+  });
+
+  it("formats chart tooltip and legend from chart configuration", () => {
+    render(<ChartContainer config={{ count: { label: "Story count", color: "#123456" } }}>
+      <>
+        <ChartTooltipContent
+          active
+          label="count"
+          payload={[{ dataKey: "count", name: "count", value: 12, color: "#123456", type: "bar", payload: { fill: "#123456" } } as never]}
+        />
+        <ChartLegendContent payload={[{ dataKey: "count", value: "count", color: "#123456", type: "square" } as never]} />
+      </>
+    </ChartContainer>);
+    expect(screen.getAllByText("Story count").length).toBeGreaterThan(0);
+    expect(screen.getByText("12")).toBeInTheDocument();
   });
 
   it("renders carousel controls and resizable panels", () => {
