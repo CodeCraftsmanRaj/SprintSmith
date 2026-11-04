@@ -1,10 +1,15 @@
+import runpy
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Route
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 from app.database import Base, get_db
 from app.main import app
@@ -117,3 +122,64 @@ def test_metrics_uses_unmatched_label_for_route_that_returns_404(client):
     assert response.status_code == 404
     metrics = client.get("/metrics")
     assert 'method="GET",path="unmatched",status="404"' in metrics.text
+
+
+@pytest.mark.asyncio
+async def test_metrics_middleware_marks_known_route_404_as_unmatched(monkeypatch):
+    import app.main as main_module
+
+    requests = Mock()
+    latency = Mock()
+    monkeypatch.setattr(main_module, "HTTP_REQUESTS", requests)
+    monkeypatch.setattr(main_module, "HTTP_LATENCY", latency)
+    request = Request({
+        "type": "http",
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/known",
+        "raw_path": b"/known",
+        "query_string": b"",
+        "headers": [],
+        "server": ("test", 80),
+        "client": ("test", 1),
+        "path_params": {},
+        "route": SimpleNamespace(path="/known"),
+    })
+
+    async def call_next(_request):
+        return Response(status_code=404)
+
+    response = await main_module.metrics_middleware(request, call_next)
+
+    assert response.status_code == 404
+    requests.labels.assert_called_once_with("GET", "unmatched", "404")
+    requests.labels.return_value.inc.assert_called_once()
+    latency.labels.assert_called_once_with("GET", "unmatched")
+    latency.labels.return_value.observe.assert_called_once()
+
+
+def test_main_creates_tables_when_configured(monkeypatch):
+    import app.main as main_module
+    import prometheus_client
+    from prometheus_client import CollectorRegistry, Counter, Histogram
+
+    create_all = Mock()
+    monkeypatch.setattr(main_module.settings, "auto_create_tables", True)
+    monkeypatch.setattr(main_module.Base.metadata, "create_all", create_all)
+    registry = CollectorRegistry()
+    monkeypatch.setattr(
+        prometheus_client,
+        "Counter",
+        lambda *args, **kwargs: Counter(*args, **kwargs, registry=registry),
+    )
+    monkeypatch.setattr(
+        prometheus_client,
+        "Histogram",
+        lambda *args, **kwargs: Histogram(*args, **kwargs, registry=registry),
+    )
+
+    with pytest.warns(RuntimeWarning, match="found in sys.modules"):
+        runpy.run_module("app.main", run_name="app.main_coverage_probe")
+
+    create_all.assert_called_once_with(bind=main_module.engine)

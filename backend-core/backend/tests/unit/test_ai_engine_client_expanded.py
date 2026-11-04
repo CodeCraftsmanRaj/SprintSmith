@@ -13,6 +13,7 @@ Verifies:
 """
 
 import pytest
+from fastapi import HTTPException
 from unittest.mock import AsyncMock, patch, MagicMock
 import httpx
 
@@ -98,7 +99,7 @@ class TestAIEngineClientRequest:
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch("app.services.ai_engine.httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(Exception) as exc_info:
+            with pytest.raises(HTTPException) as exc_info:
                 await client._request("GET", "/health")
             assert "502" in str(exc_info.value) or "unavailable" in str(exc_info.value)
 
@@ -115,6 +116,94 @@ class TestAIEngineClientRequest:
         with patch("app.services.ai_engine.httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(Exception):
                 await client._request("GET", "/health")
+
+    @pytest.mark.asyncio
+    async def test_request_maps_upstream_client_error_to_actionable_502(self):
+        client = AIEngineClient(base_url="http://engine:8001")
+        response = MagicMock()
+        response.status_code = 400
+        error = httpx.HTTPStatusError(
+            "bad request",
+            request=MagicMock(),
+            response=response,
+        )
+        mock_client = MagicMock()
+        mock_client.request = AsyncMock(side_effect=error)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.ai_engine.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(Exception) as exc_info:
+                await client._request("GET", "/health")
+
+        assert exc_info.value.status_code == 502
+        assert "rejected the request" in exc_info.value.detail
+
+
+class TestAIEngineClientStreaming:
+    @pytest.mark.asyncio
+    async def test_stream_generate_yields_chunks_and_closes_resources(self):
+        client = AIEngineClient(base_url="http://engine:8001")
+
+        async def chunks():
+            yield b"data: one\n\n"
+            yield b"data: [DONE]\n\n"
+
+        response = MagicMock()
+        response.status_code = 200
+        response.aiter_bytes = chunks
+        response.aclose = AsyncMock()
+        mock_client = MagicMock()
+        mock_client.build_request.return_value = MagicMock()
+        mock_client.send = AsyncMock(return_value=response)
+        mock_client.aclose = AsyncMock()
+
+        with patch("app.services.ai_engine.httpx.AsyncClient", return_value=mock_client):
+            stream = await client.stream_generate("proj-1", "user_story", "requirement")
+            result = [chunk async for chunk in stream]
+
+        assert result == [b"data: one\n\n", b"data: [DONE]\n\n"]
+        response.aclose.assert_awaited_once()
+        mock_client.aclose.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_stream_generate_maps_upstream_error_and_closes_client(self):
+        client = AIEngineClient(base_url="http://engine:8001")
+        response = MagicMock()
+        response.status_code = 503
+        response.aread = AsyncMock(return_value=b"unavailable")
+        response.aclose = AsyncMock()
+        mock_client = MagicMock()
+        mock_client.build_request.return_value = MagicMock()
+        mock_client.send = AsyncMock(return_value=response)
+        mock_client.aclose = AsyncMock()
+
+        with patch("app.services.ai_engine.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(HTTPException) as exc_info:
+                await client.stream_generate("proj-1", "user_story", "requirement")
+
+        assert exc_info.value.status_code == 502
+        assert "503" in exc_info.value.detail
+        response.aread.assert_awaited_once()
+        response.aclose.assert_awaited_once()
+        mock_client.aclose.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_stream_generate_maps_connection_failure(self):
+        client = AIEngineClient(base_url="http://engine:8001")
+        mock_client = MagicMock()
+        mock_client.build_request.return_value = MagicMock()
+        mock_client.send = AsyncMock(
+            side_effect=httpx.ConnectError("engine down", request=MagicMock()),
+        )
+        mock_client.aclose = AsyncMock()
+
+        with patch("app.services.ai_engine.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(HTTPException) as exc_info:
+                await client.stream_generate("proj-1", "user_story", "requirement")
+
+        assert exc_info.value.status_code == 503
+        mock_client.aclose.assert_awaited_once()
 
 
 class TestAIEngineClientMethods:
@@ -172,6 +261,50 @@ class TestAIEngineClientMethods:
             result = await client.ingest_status("job-1")
             assert result["status"] == "failed"
             assert "unknown" in result["error"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("failure_kind", "expected_status", "expected_detail"),
+        [
+            ("http", 502, "AI engine returned 500"),
+            ("request", 503, "AI engine is unavailable"),
+            ("json", 502, "AI engine returned an invalid response"),
+        ],
+    )
+    async def test_ingest_status_maps_upstream_failures(
+        self, failure_kind, expected_status, expected_detail
+    ):
+        client = AIEngineClient(base_url="http://engine:8001")
+        response = MagicMock()
+        response.status_code = 500 if failure_kind == "http" else 200
+        response.text = "engine error"
+        request = httpx.Request("GET", "http://engine:8001/ingest/job-1")
+
+        mock_client = MagicMock()
+        if failure_kind == "http":
+            error = httpx.HTTPStatusError(
+                "server error",
+                request=request,
+                response=httpx.Response(500, request=request, text="engine error"),
+            )
+            response.raise_for_status.side_effect = error
+            mock_client.request = AsyncMock(return_value=response)
+        elif failure_kind == "request":
+            mock_client.request = AsyncMock(
+                side_effect=httpx.ConnectError("engine unavailable", request=request)
+            )
+        else:
+            response.json.side_effect = ValueError("invalid JSON")
+            mock_client.request = AsyncMock(return_value=response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.ai_engine.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(HTTPException) as exc_info:
+                await client.ingest_status("job-1")
+
+        assert exc_info.value.status_code == expected_status
+        assert expected_detail in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_evaluate_batch(self):

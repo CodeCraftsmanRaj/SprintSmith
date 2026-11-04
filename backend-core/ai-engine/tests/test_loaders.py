@@ -113,14 +113,13 @@ def test_s3_path_downloads_then_loads(monkeypatch):
 
 
 def test_download_from_s3_calls_boto3(monkeypatch):
-    pytest.importorskip("boto3")
     from app.config import settings
     monkeypatch.setattr(settings, "S3_EXPECTED_BUCKET_OWNER", "123456789012")
-    mock_s3 = MagicMock()
     mock_client = MagicMock()
-    mock_s3.client.return_value = mock_client
+    boto3_module = ModuleType("boto3")
+    boto3_module.client = MagicMock(return_value=mock_client)
 
-    with patch("boto3.client", mock_s3.client), \
+    with patch.dict(sys.modules, {"boto3": boto3_module}), \
          patch("tempfile.NamedTemporaryFile") as mock_ntf:
         mock_tmp = MagicMock()
         mock_tmp.name = "/tmp/test.pdf"
@@ -135,15 +134,34 @@ def test_download_from_s3_calls_boto3(monkeypatch):
     )
     assert result == "/tmp/test.pdf"
 
-
 def test_download_from_s3_requires_expected_bucket_owner(monkeypatch):
-    pytest.importorskip("boto3")
     from app.config import settings
     monkeypatch.setattr(settings, "S3_EXPECTED_BUCKET_OWNER", "")
 
-    from app.ingestion.loaders import _download_from_s3
-    with pytest.raises(RuntimeError, match="S3_EXPECTED_BUCKET_OWNER"):
-        _download_from_s3("s3://bucket/key.pdf")
+    boto3_module = ModuleType("boto3")
+    boto3_module.client = MagicMock()
+    with patch.dict(sys.modules, {"boto3": boto3_module}):
+        from app.ingestion.loaders import _download_from_s3
+
+        with pytest.raises(RuntimeError, match="S3_EXPECTED_BUCKET_OWNER"):
+            _download_from_s3("s3://bucket/key.pdf")
+
+
+def test_scanned_pdf_loader_uses_textract():
+    loader_module = ModuleType("langchain_community.document_loaders")
+    loader_class = MagicMock()
+    loader_class.return_value.load.return_value = [
+        Document(page_content="OCR output", metadata={}),
+    ]
+    loader_module.AmazonTextractPDFLoader = loader_class
+
+    with patch.dict(sys.modules, {"langchain_community.document_loaders": loader_module}):
+        from app.ingestion.loaders import _load_scanned_pdf_fallback
+
+        docs = _load_scanned_pdf_fallback("/tmp/scanned.pdf")
+
+    loader_class.assert_called_once_with("/tmp/scanned.pdf")
+    assert docs[0].page_content == "OCR output"
 
 
 def test_scanned_pdf_fallback_for_empty_extraction(monkeypatch, tmp_path):

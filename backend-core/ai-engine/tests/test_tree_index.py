@@ -75,6 +75,17 @@ def test_flat_document_becomes_low_structure_pseudo_sections():
     assert nodes[-1].page_end == 8
 
 
+def test_empty_and_blank_flat_documents_do_not_create_nodes():
+    assert build_tree(DOC, []) == []
+
+    nodes = build_tree(DOC, [Block(" \n"), Block("Body without page metadata")])
+
+    assert len(nodes) == 1
+    assert nodes[0].text == "Body without page metadata"
+    assert nodes[0].page_start is None
+    assert nodes[0].page_end is None
+
+
 def test_subtree_text_includes_children_in_order():
     blocks = blocks_from_markdown("# A\nintro\n## B\nbee\n## C\nsee\n")
     a = _by_title(build_tree(DOC, blocks))["A"]
@@ -99,6 +110,26 @@ def test_docx_heading_styles_build_hierarchy(tmp_path):
     assert t["1.1 Password Reset"].parent_id == t["1 Authentication"].node_id
     assert t["1.1 Password Reset"].text == "Reset via OTP within 10 minutes."
     assert t["2 Payments"].text == "Limits apply."
+
+
+def test_docx_parser_keeps_paragraphs_without_a_style(monkeypatch):
+    from types import SimpleNamespace
+
+    from docx import Document as DocxDocument
+    from app.retrieval.tree_index import blocks_from_docx
+
+    paragraph = SimpleNamespace(text="Plain paragraph", style=None)
+    blank_paragraph = SimpleNamespace(text="  ", style=None)
+    monkeypatch.setattr(
+        "docx.Document",
+        lambda _path: SimpleNamespace(paragraphs=[blank_paragraph, paragraph]),
+    )
+
+    blocks = blocks_from_docx("not-opened.docx")
+
+    assert len(blocks) == 1
+    assert blocks[0].text == "Plain paragraph"
+    assert blocks[0].heading_level is None
 
 
 def test_header_level_from_numbering_overrides_docling_level():
