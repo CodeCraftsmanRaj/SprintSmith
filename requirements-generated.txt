@@ -1,0 +1,5 @@
+error: unexpected argument 'export' found
+
+Usage: uv lock [OPTIONS]
+
+For more information, try '--help'.
