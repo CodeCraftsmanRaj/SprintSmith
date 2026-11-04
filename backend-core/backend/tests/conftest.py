@@ -120,6 +120,24 @@ def audit_repo(db_session):
     return AuditRepository(db_session)
 
 
+@pytest.fixture
+def evaluation_repo(db_session):
+    from app.repositories.evaluation_repo import EvaluationRepository
+    return EvaluationRepository(db_session)
+
+
+@pytest.fixture
+def ingest_job_repo(db_session):
+    from app.repositories.ingest_job_repo import IngestJobRepository
+    return IngestJobRepository(db_session)
+
+
+@pytest.fixture
+def history_repo(db_session):
+    from app.repositories.history_repo import GenerationHistoryRepository
+    return GenerationHistoryRepository(db_session)
+
+
 # ── Service Fixtures ──────────────────────────────────────────────────────────
 
 @pytest.fixture
