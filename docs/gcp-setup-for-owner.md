@@ -150,7 +150,6 @@ gcloud projects get-iam-policy major-project-512815 \
 
 gcloud storage buckets get-iam-policy gs://major-project-512815_cloudbuild \
   --flatten="bindings[].members" \
-  --filter="bindings.members:serviceAccount:sprintsmith-github-deploy@major-project-512815.iam.gserviceaccount.com" \
   --format="table(bindings.role,bindings.members)"
 ```
 

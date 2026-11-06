@@ -28,6 +28,23 @@ if [[ "${SKIP_BUILD:-false}" != "true" ]]; then
 	ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
 	echo "Submitting Cloud Build as: ${ACTIVE_ACCOUNT:-unknown}"
 	echo "Cloud Build source staging bucket: ${STAGING_BUCKET}"
+	BILLING_ACCOUNT="$(gcloud billing projects describe "$PROJECT_ID" --format='value(billingAccountName)' 2>/dev/null || true)"
+	if [[ -z "$BILLING_ACCOUNT" ]]; then
+		cat >&2 <<EOF
+
+Cloud Build cannot start because project ${PROJECT_ID} has no active billing account.
+The GCP billing account is disabled, delinquent, or not linked to the project.
+
+A billing administrator must restore billing for ${PROJECT_ID} in the Google Cloud
+Console before rerunning this workflow:
+
+  https://console.cloud.google.com/billing/linkedaccount?project=${PROJECT_ID}
+
+The IAM service account and staging bucket permissions cannot override a disabled
+or delinquent billing account.
+EOF
+		exit 1
+	fi
 	if ! gcloud builds submit \
 		--project "$PROJECT_ID" \
 		--gcs-source-staging-dir="${STAGING_BUCKET}/source" \
@@ -72,8 +89,8 @@ EOF
 		echo "Staging bucket IAM bindings for the active account:" >&2
 		gcloud storage buckets get-iam-policy "$STAGING_BUCKET" \
 			--flatten="bindings[].members" \
-			--filter="bindings.members:serviceAccount:${ACTIVE_ACCOUNT}" \
-			--format="table(bindings.role,bindings.members)" >&2 || \
+			--format="table(bindings.role,bindings.members)" 2>/dev/null \
+			| grep -F "serviceAccount:${ACTIVE_ACCOUNT}" >&2 || \
 			echo "Could not read the staging bucket IAM policy." >&2
 		exit 1
 	fi
