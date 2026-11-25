@@ -4,15 +4,87 @@ const card = "rounded-lg bg-surface-container-low border border-outline-variant/
 const chip = "font-label-sm text-label-sm px-1.5 py-0.5 rounded";
 
 const rows: [string, string, string, string, string, string, string][] = [
-  ["09:12:44", "devansh.m", "artifact.signoff", "US-PAY-01", "Signed-off & pushed to Jira", "success", "a91f…2c"],
-  ["09:10:02", "langgraph", "generate.complete", "run-09d2e1", "user_story · Llama-3.1-70B · 3.42s", "success", "77be…01"],
-  ["09:09:58", "langgraph", "qa_judge.retry", "run-09d2e1", "Score 0.81 < 0.85 → retry #1", "warning", "4c0d…e8"],
-  ["09:05:31", "devansh.m", "requirement.upload", "SRS_v2.pdf", "Ingest job job_8812 queued", "success", "b3a2…9f"],
-  ["08:59:17", "system", "compliance.gate", "run-09cf77", "PAN detected in output → masked", "error", "e01c…44"],
-  ["08:44:03", "a.kapoor", "project.member.add", "Payments Core", "Added s.jain as reviewer", "success", "51aa…7d"],
-  ["08:30:20", "r.mathuria", "prompt.publish", "pm_generate", "v3.1 → v3.2 promoted to prod", "success", "9d3e…b0"],
-  ["08:12:55", "system", "auth.login.failed", "unknown", "3 failed attempts · IP 10.4.2.19", "warning", "c6f2…13"],
-  ["07:58:10", "r.mathuria", "evaluate.batch", "hybrid", "120 cases · MRR 0.91", "success", "0aa7…5e"],
+  [
+    "09:12:44",
+    "devansh.m",
+    "artifact.signoff",
+    "US-PAY-01",
+    "Signed-off & pushed to Jira",
+    "success",
+    "a91f…2c",
+  ],
+  [
+    "09:10:02",
+    "langgraph",
+    "generate.complete",
+    "run-09d2e1",
+    "user_story · Llama-3.1-70B · 3.42s",
+    "success",
+    "77be…01",
+  ],
+  [
+    "09:09:58",
+    "langgraph",
+    "qa_judge.retry",
+    "run-09d2e1",
+    "Score 0.81 < 0.85 → retry #1",
+    "warning",
+    "4c0d…e8",
+  ],
+  [
+    "09:05:31",
+    "devansh.m",
+    "requirement.upload",
+    "SRS_v2.pdf",
+    "Ingest job job_8812 queued",
+    "success",
+    "b3a2…9f",
+  ],
+  [
+    "08:59:17",
+    "system",
+    "compliance.gate",
+    "run-09cf77",
+    "PAN detected in output → masked",
+    "error",
+    "e01c…44",
+  ],
+  [
+    "08:44:03",
+    "a.kapoor",
+    "project.member.add",
+    "Payments Core",
+    "Added s.jain as reviewer",
+    "success",
+    "51aa…7d",
+  ],
+  [
+    "08:30:20",
+    "r.mathuria",
+    "prompt.publish",
+    "pm_generate",
+    "v3.1 → v3.2 promoted to prod",
+    "success",
+    "9d3e…b0",
+  ],
+  [
+    "08:12:55",
+    "system",
+    "auth.login.failed",
+    "unknown",
+    "3 failed attempts · IP 10.4.2.19",
+    "warning",
+    "c6f2…13",
+  ],
+  [
+    "07:58:10",
+    "r.mathuria",
+    "evaluate.batch",
+    "hybrid",
+    "120 cases · MRR 0.91",
+    "success",
+    "0aa7…5e",
+  ],
 ];
 
 const tone: Record<string, string> = {
@@ -50,9 +122,15 @@ const main = `
 </div>
 
 <div class="grid grid-cols-2 xl:grid-cols-4 gap-gutter">
-  ${[["Events (24h)", "1,284", "text-on-surface"], ["Generations", "212", "text-primary"], ["Guardrail Triggers", "7", "text-error"], ["Chain Integrity", "Verified", "text-secondary"]]
+  ${[
+    ["Events (24h)", "1,284", "text-on-surface"],
+    ["Generations", "212", "text-primary"],
+    ["Guardrail Triggers", "7", "text-error"],
+    ["Chain Integrity", "Verified", "text-secondary"],
+  ]
     .map(
-      ([l, v, c]) => `<div class="${card} p-space-md"><span class="font-label-sm text-label-sm uppercase tracking-wider text-outline">${l}</span><p class="font-headline-lg text-headline-lg ${c} mt-1">${v}</p></div>`,
+      ([l, v, c]) =>
+        `<div class="${card} p-space-md"><span class="font-label-sm text-label-sm uppercase tracking-wider text-outline">${l}</span><p class="font-headline-lg text-headline-lg ${c} mt-1">${v}</p></div>`,
     )
     .join("")}
 </div>

@@ -6,7 +6,16 @@ import { Constants } from "@/integrations/supabase/types";
 describe("router setup and generated route metadata", () => {
   it("builds a router with all generated pages", () => {
     const router = getRouter();
-    for (const path of ["/", "/audit", "/login", "/overview", "/plan", "/prompts", "/synthesize", "/verify"]) {
+    for (const path of [
+      "/",
+      "/audit",
+      "/login",
+      "/overview",
+      "/plan",
+      "/prompts",
+      "/synthesize",
+      "/verify",
+    ]) {
       expect(router.matchRoutes(path).length).toBeGreaterThan(0);
     }
     expect(routeTree).toBeDefined();

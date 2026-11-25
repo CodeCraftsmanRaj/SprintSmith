@@ -1,4 +1,5 @@
-const input = "w-full px-space-sm py-2 rounded bg-surface-container border border-outline-variant/40 font-body-md text-body-md text-on-surface placeholder:text-outline focus:outline-none focus:border-primary";
+const input =
+  "w-full px-space-sm py-2 rounded bg-surface-container border border-outline-variant/40 font-body-md text-body-md text-on-surface placeholder:text-outline focus:outline-none focus:border-primary";
 
 export const bodyClass = "bg-surface font-body-md text-body-md text-on-surface antialiased";
 export const script = `

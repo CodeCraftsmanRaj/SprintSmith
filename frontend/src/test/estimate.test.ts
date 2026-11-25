@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  snapToFibonacci,
-  normalizeEstimate,
-  estimateSchema,
-  FIBONACCI,
-} from "@/lib/estimate";
+import { snapToFibonacci, normalizeEstimate, estimateSchema, FIBONACCI } from "@/lib/estimate";
 
 describe("estimate utilities", () => {
   describe("snapToFibonacci", () => {
@@ -81,14 +76,7 @@ describe("estimate utilities", () => {
         ],
       });
 
-      expect(result.criteria).toEqual([
-        "Crit 1",
-        "Crit 2",
-        "Crit 3",
-        "Crit 4",
-        "Crit 5",
-        "Crit 6",
-      ]);
+      expect(result.criteria).toEqual(["Crit 1", "Crit 2", "Crit 3", "Crit 4", "Crit 5", "Crit 6"]);
     });
   });
 

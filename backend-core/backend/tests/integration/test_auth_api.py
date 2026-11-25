@@ -45,6 +45,20 @@ def test_register_validation_errors(client):
     assert r3.status_code == 422
 
 
+def test_public_registration_cannot_assign_admin_role(client):
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "no-escalation@example.com",
+            "full_name": "No Escalation",
+            "password": "CorrectPassword1!",
+            "role": "admin",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["role"] == "member"
+
+
 def test_login_success_and_failures(client):
     # Register user
     client.post(

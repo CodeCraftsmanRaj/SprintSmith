@@ -73,7 +73,9 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
       expect(screen.getByRole("button", { name: /acceptance criteria/i })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /test case/i })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /sprint plan/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /architecture recommendation/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /architecture recommendation/i }),
+      ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /api specification/i })).toBeInTheDocument();
 
       // Select User Story
@@ -252,9 +254,7 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
         screen.getByText("Project search is taking longer than expected."),
       ).toBeInTheDocument();
       expect(
-        screen.getByText(
-          "Your inputs are still here. Try Generate artifact again in a moment.",
-        ),
+        screen.getByText("Your inputs are still here. Try Generate artifact again in a moment."),
       ).toBeInTheDocument();
     });
 

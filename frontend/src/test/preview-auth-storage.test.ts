@@ -12,7 +12,9 @@ function createPreviewStorage() {
     hostname: `id-preview--${PROJECT_ID}.lovable.app`,
     ancestorOrigins: [EDITOR_ORIGIN],
   });
-  vi.stubGlobal("crypto", { randomUUID: vi.fn(() => `request-${postMessage.mock.calls.length + 1}`) });
+  vi.stubGlobal("crypto", {
+    randomUUID: vi.fn(() => `request-${postMessage.mock.calls.length + 1}`),
+  });
   const storage = brokeredPreviewStorage()!;
 
   async function answerNext(value: string | null, options: { ok?: boolean; origin?: string } = {}) {
@@ -20,10 +22,17 @@ function createPreviewStorage() {
     const call = postMessage.mock.calls[callIndex - 1];
     const request = call[0] as { requestId: string };
     const origin = options.origin ?? EDITOR_ORIGIN;
-    window.dispatchEvent(new MessageEvent("message", {
-      origin,
-      data: { type: "lovable-preview-auth:result", requestId: request.requestId, ok: options.ok ?? true, value },
-    }));
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin,
+        data: {
+          type: "lovable-preview-auth:result",
+          requestId: request.requestId,
+          ok: options.ok ?? true,
+          value,
+        },
+      }),
+    );
   }
 
   return { storage, postMessage, answerNext };
@@ -41,7 +50,9 @@ describe("brokered preview auth storage", () => {
 
     const reading = storage.getItem("supabase-session");
     expect(postMessage.mock.calls[0]![0]).toMatchObject({
-      type: "lovable-preview-auth:get", projectId: PROJECT_ID, key: "supabase-session",
+      type: "lovable-preview-auth:get",
+      projectId: PROJECT_ID,
+      key: "supabase-session",
     });
     await answerNext("editor-session");
     await expect(reading).resolves.toBe("editor-session");
@@ -51,7 +62,9 @@ describe("brokered preview auth storage", () => {
     await answerNext("canonical-session");
     await setting;
     expect(postMessage.mock.calls[1]![0]).toMatchObject({
-      type: "lovable-preview-auth:set", key: "supabase-session", value: "new-session",
+      type: "lovable-preview-auth:set",
+      key: "supabase-session",
+      value: "new-session",
     });
     expect(localStorage.getItem("supabase-session")).toBe("canonical-session");
 
@@ -73,7 +86,9 @@ describe("brokered preview auth storage", () => {
     const removing = storage.removeItem("token");
     expect(localStorage.getItem("token")).toBeNull();
     expect(postMessage.mock.calls[1]![0]).toMatchObject({
-      type: "lovable-preview-auth:remove", key: "token", value: "local-token",
+      type: "lovable-preview-auth:remove",
+      key: "token",
+      value: "local-token",
     });
     await answerNext(null);
     await removing;
@@ -90,7 +105,10 @@ describe("brokered preview auth storage", () => {
       hostname: `preview--attacker--${PROJECT_ID}.lovable.app`,
       ancestorOrigins: [EDITOR_ORIGIN],
     });
-    Object.defineProperty(window, "parent", { configurable: true, value: { postMessage: vi.fn() } });
+    Object.defineProperty(window, "parent", {
+      configurable: true,
+      value: { postMessage: vi.fn() },
+    });
     expect(brokeredPreviewStorage()).toBe(localStorage);
   });
 });

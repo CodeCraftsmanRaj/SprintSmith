@@ -4,19 +4,48 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Toggle } from "@/components/ui/toggle";
@@ -25,7 +54,9 @@ import { cn } from "@/lib/utils";
 describe("UI primitives", () => {
   describe("cn utility", () => {
     it("merges conditional classnames and removes conflicting tailwind classes", () => {
-      const result = cn("px-2 py-1", false && "hidden", true && "px-4", "text-red-500");
+      const hidden = false as boolean;
+      const includePadding = true as boolean;
+      const result = cn("px-2 py-1", hidden && "hidden", includePadding && "px-4", "text-red-500");
       expect(result).toContain("px-4");
       expect(result).not.toContain("px-2");
       expect(result).toContain("text-red-500");
@@ -99,9 +130,7 @@ describe("UI primitives", () => {
   describe("Input component", () => {
     it("renders input field and accepts user text changes", () => {
       const handleChange = vi.fn();
-      render(
-        <Input placeholder="Enter username" onChange={handleChange} />,
-      );
+      render(<Input placeholder="Enter username" onChange={handleChange} />);
 
       const input = screen.getByPlaceholderText("Enter username");
       expect(input).toBeInTheDocument();
@@ -191,9 +220,21 @@ describe("UI primitives", () => {
       render(
         <Table>
           <TableCaption>Recent projects</TableCaption>
-          <TableHeader><TableRow><TableHead>Name</TableHead></TableRow></TableHeader>
-          <TableBody><TableRow><TableCell>Payments</TableCell></TableRow></TableBody>
-          <TableFooter><TableRow><TableCell>1 project</TableCell></TableRow></TableFooter>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell>Payments</TableCell>
+            </TableRow>
+          </TableBody>
+          <TableFooter>
+            <TableRow>
+              <TableCell>1 project</TableCell>
+            </TableRow>
+          </TableFooter>
         </Table>,
       );
 
@@ -215,14 +256,19 @@ describe("UI primitives", () => {
             <RadioGroupItem value="editor" aria-label="Editor" />
           </RadioGroup>
           <Switch aria-label="Enable alerts" />
-          <Toggle aria-label="Pin project" variant="outline" size="sm">Pin</Toggle>
+          <Toggle aria-label="Pin project" variant="outline" size="sm">
+            Pin
+          </Toggle>
         </>,
       );
 
       const checkbox = screen.getByRole("checkbox", { name: "Select project" });
       fireEvent.click(checkbox);
       expect(checkbox).toHaveAttribute("data-state", "checked");
-      expect(screen.getByRole("radio", { name: "Editor" })).toHaveAttribute("data-state", "checked");
+      expect(screen.getByRole("radio", { name: "Editor" })).toHaveAttribute(
+        "data-state",
+        "checked",
+      );
 
       const toggle = screen.getByRole("button", { name: "Pin project" });
       fireEvent.click(toggle);
@@ -237,7 +283,10 @@ describe("UI primitives", () => {
       render(
         <>
           <Tabs defaultValue="overview">
-            <TabsList><TabsTrigger value="overview">Overview tab</TabsTrigger><TabsTrigger value="activity">Activity tab</TabsTrigger></TabsList>
+            <TabsList>
+              <TabsTrigger value="overview">Overview tab</TabsTrigger>
+              <TabsTrigger value="activity">Activity tab</TabsTrigger>
+            </TabsList>
             <TabsContent value="overview">Overview panel</TabsContent>
             <TabsContent value="activity">Activity panel</TabsContent>
           </Tabs>
@@ -271,10 +320,20 @@ describe("UI primitives", () => {
           </Avatar>
           <Pagination>
             <PaginationContent>
-              <PaginationItem><PaginationPrevious href="?page=1" /></PaginationItem>
-              <PaginationItem><PaginationLink href="?page=2" isActive>2</PaginationLink></PaginationItem>
-              <PaginationItem><PaginationEllipsis /></PaginationItem>
-              <PaginationItem><PaginationNext href="?page=3" /></PaginationItem>
+              <PaginationItem>
+                <PaginationPrevious href="?page=1" />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationLink href="?page=2" isActive>
+                  2
+                </PaginationLink>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationEllipsis />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext href="?page=3" />
+              </PaginationItem>
             </PaginationContent>
           </Pagination>
         </>,
@@ -282,9 +341,15 @@ describe("UI primitives", () => {
 
       expect(screen.getByText("PO")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "pagination" })).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "Go to previous page" })).toHaveAttribute("href", "?page=1");
+      expect(screen.getByRole("link", { name: "Go to previous page" })).toHaveAttribute(
+        "href",
+        "?page=1",
+      );
       expect(screen.getByRole("link", { name: "2" })).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("link", { name: "Go to next page" })).toHaveAttribute("href", "?page=3");
+      expect(screen.getByRole("link", { name: "Go to next page" })).toHaveAttribute(
+        "href",
+        "?page=3",
+      );
       expect(screen.getByText("More pages")).toBeInTheDocument();
     });
   });

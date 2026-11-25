@@ -3,9 +3,24 @@ import { shell } from "./shell";
 const card = "rounded-lg bg-surface-container-low border border-outline-variant/30";
 const chip = "font-label-sm text-label-sm px-1.5 py-0.5 rounded";
 
-type Story = { id: string; title: string; pts: number; pri: string; tag: string; owner: string; trace: string };
+type Story = {
+  id: string;
+  title: string;
+  pts: number;
+  pri: string;
+  tag: string;
+  owner: string;
+  trace: string;
+};
 
-const col = (title: string, icon: string, count: string, cap: string, stories: Story[], tone: string) => `
+const col = (
+  title: string,
+  icon: string,
+  count: string,
+  cap: string,
+  stories: Story[],
+  tone: string,
+) => `
 <div class="${card} flex flex-col">
   <div class="flex items-center justify-between px-space-md py-space-sm border-b border-outline-variant/30">
     <div class="flex items-center gap-space-xs"><span class="material-symbols-outlined text-[16px] ${tone}">${icon}</span>
@@ -78,21 +93,114 @@ const main = `
 </div>
 
 <div class="grid grid-cols-1 xl:grid-cols-3 gap-gutter">
-  ${col("Product Backlog", "inventory_2", "6", "41 pts", [
-    { id: "US-PAY-07", title: "Reconcile BACS settlement files nightly", pts: 8, pri: "P1", tag: "Settlement", owner: "AK", trace: "SRS §3.2" },
-    { id: "US-PAY-08", title: "Circuit breaker for ledger gateway timeouts", pts: 5, pri: "P1", tag: "Resilience", owner: "RM", trace: "SRS §4.1" },
-    { id: "US-PAY-09", title: "Audit trail export for PCI-DSS assessors", pts: 3, pri: "P2", tag: "Compliance", owner: "DM", trace: "SRS §5.3" },
-  ], "text-outline")}
-  ${col("Sprint 24.4 — Committed", "flag", "5", "36 / 40 pts", [
-    { id: "US-PAY-01", title: "Idempotent payment initiation API", pts: 5, pri: "P0", tag: "Ledger", owner: "DM", trace: "SRS §2.1" },
-    { id: "US-PAY-02", title: "Async Kafka ledger dispatch with DLQ", pts: 8, pri: "P0", tag: "Ledger", owner: "AK", trace: "SRS §2.2" },
-    { id: "US-PAY-03", title: "ISO 20022 pain.001 schema validation", pts: 8, pri: "P1", tag: "Validation", owner: "RM", trace: "SRS §2.3" },
-    { id: "US-PAY-04", title: "Tokenize PAN before persistence", pts: 13, pri: "P0", tag: "Security", owner: "SJ", trace: "SRS §5.1" },
-  ], "text-primary")}
-  ${col("In Review / Done", "task_alt", "3", "16 pts", [
-    { id: "US-PAY-05", title: "Redis idempotency TTL lock (120s)", pts: 3, pri: "P0", tag: "Ledger", owner: "DM", trace: "SRS §2.1" },
-    { id: "US-PAY-06", title: "OpenAPI 3.1 contract published", pts: 2, pri: "P2", tag: "API", owner: "SJ", trace: "SRS §2.1" },
-  ], "text-secondary")}
+  ${col(
+    "Product Backlog",
+    "inventory_2",
+    "6",
+    "41 pts",
+    [
+      {
+        id: "US-PAY-07",
+        title: "Reconcile BACS settlement files nightly",
+        pts: 8,
+        pri: "P1",
+        tag: "Settlement",
+        owner: "AK",
+        trace: "SRS §3.2",
+      },
+      {
+        id: "US-PAY-08",
+        title: "Circuit breaker for ledger gateway timeouts",
+        pts: 5,
+        pri: "P1",
+        tag: "Resilience",
+        owner: "RM",
+        trace: "SRS §4.1",
+      },
+      {
+        id: "US-PAY-09",
+        title: "Audit trail export for PCI-DSS assessors",
+        pts: 3,
+        pri: "P2",
+        tag: "Compliance",
+        owner: "DM",
+        trace: "SRS §5.3",
+      },
+    ],
+    "text-outline",
+  )}
+  ${col(
+    "Sprint 24.4 — Committed",
+    "flag",
+    "5",
+    "36 / 40 pts",
+    [
+      {
+        id: "US-PAY-01",
+        title: "Idempotent payment initiation API",
+        pts: 5,
+        pri: "P0",
+        tag: "Ledger",
+        owner: "DM",
+        trace: "SRS §2.1",
+      },
+      {
+        id: "US-PAY-02",
+        title: "Async Kafka ledger dispatch with DLQ",
+        pts: 8,
+        pri: "P0",
+        tag: "Ledger",
+        owner: "AK",
+        trace: "SRS §2.2",
+      },
+      {
+        id: "US-PAY-03",
+        title: "ISO 20022 pain.001 schema validation",
+        pts: 8,
+        pri: "P1",
+        tag: "Validation",
+        owner: "RM",
+        trace: "SRS §2.3",
+      },
+      {
+        id: "US-PAY-04",
+        title: "Tokenize PAN before persistence",
+        pts: 13,
+        pri: "P0",
+        tag: "Security",
+        owner: "SJ",
+        trace: "SRS §5.1",
+      },
+    ],
+    "text-primary",
+  )}
+  ${col(
+    "In Review / Done",
+    "task_alt",
+    "3",
+    "16 pts",
+    [
+      {
+        id: "US-PAY-05",
+        title: "Redis idempotency TTL lock (120s)",
+        pts: 3,
+        pri: "P0",
+        tag: "Ledger",
+        owner: "DM",
+        trace: "SRS §2.1",
+      },
+      {
+        id: "US-PAY-06",
+        title: "OpenAPI 3.1 contract published",
+        pts: 2,
+        pri: "P2",
+        tag: "API",
+        owner: "SJ",
+        trace: "SRS §2.1",
+      },
+    ],
+    "text-secondary",
+  )}
 </div>
 
 <div class="grid grid-cols-1 xl:grid-cols-3 gap-gutter">

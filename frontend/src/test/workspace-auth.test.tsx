@@ -13,29 +13,27 @@ describe("Workspace - Authentication", () => {
     render(<Workspace />);
 
     expect(screen.getByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
-    expect(
-      screen.getByText("Sign in to continue to your project console."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Sign in to continue to your project console.")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("you@company.com")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("At least 8 characters")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/full name/i)).not.toBeInTheDocument();
   });
 
-  it("switches to registration mode and displays full name input", () => {
+  it("does not offer public registration", () => {
     render(<Workspace />);
 
-    const registerTab = screen.getByRole("button", { name: "Create account" });
-    fireEvent.click(registerTab);
+    expect(screen.queryByRole("button", { name: /create account/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/full name/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/accounts are provisioned by an administrator/i)).toBeInTheDocument();
+  });
 
-    expect(screen.getByRole("heading", { name: "Create your workspace" })).toBeInTheDocument();
-    expect(screen.getByLabelText(/full name/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Your name")).toBeInTheDocument();
-
-    // Switch back to sign in
-    const signInTab = screen.getByRole("button", { name: "Sign in" });
-    fireEvent.click(signInTab);
-    expect(screen.getByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
+  it("toggles password visibility without an API call", () => {
+    render(<Workspace />);
+    const password = screen.getByLabelText("Password") as HTMLInputElement;
+    expect(password.type).toBe("password");
+    fireEvent.click(screen.getByRole("button", { name: /show password/i }));
+    expect(password.type).toBe("text");
   });
 
   it("handles successful sign in and stores auth token in localStorage", async () => {
@@ -62,7 +60,7 @@ describe("Workspace - Authentication", () => {
     render(<Workspace />);
 
     const emailInput = screen.getByLabelText(/email address/i);
-    const passwordInput = screen.getByLabelText(/password/i);
+    const passwordInput = screen.getByLabelText("Password");
     const submitBtn = screen.getByRole("button", { name: /sign in/i });
 
     fireEvent.change(emailInput, { target: { value: "dev@barclays.com" } });
@@ -77,69 +75,42 @@ describe("Workspace - Authentication", () => {
     await waitFor(() => {
       expect(screen.getByText("Dev User")).toBeInTheDocument();
       expect(screen.getByText("admin")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Admin" })).toBeInTheDocument();
     });
   });
 
-  it("handles registration flow calling register then login", async () => {
+  it("never calls the registration endpoint during sign in", async () => {
     const apiSpy = vi.spyOn(backendApi, "api");
-
     apiSpy.mockImplementation((path) => {
-      if (path === "/api/v1/auth/register") {
-        return Promise.resolve({
-          id: "u2",
-          email: "new@barclays.com",
-          full_name: "New Engineer",
-          role: "member",
-        });
-      }
       if (path === "/api/v1/auth/login") {
-        return Promise.resolve({ access_token: "new-user-token" });
+        return Promise.resolve({ access_token: "member-token" });
       }
       if (path === "/api/v1/auth/me") {
         return Promise.resolve({
           id: "u2",
-          email: "new@barclays.com",
+          email: "member@example.com",
           full_name: "New Engineer",
           role: "member",
         });
       }
-      if (path === "/api/v1/projects") {
-        return Promise.resolve([]);
-      }
-      return Promise.resolve({});
+      return Promise.resolve([]);
     });
 
     render(<Workspace />);
-
-    // Switch to register
-    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
-
-    fireEvent.change(screen.getByLabelText(/full name/i), {
-      target: { value: "New Engineer" },
-    });
     fireEvent.change(screen.getByLabelText(/email address/i), {
-      target: { value: "new@barclays.com" },
+      target: { value: "member@example.com" },
     });
-    fireEvent.change(screen.getByLabelText(/password/i), {
+    fireEvent.change(screen.getByLabelText("Password"), {
       target: { value: "secret1234" },
     });
-
-    const submitBtn = screen.getByRole("button", { name: /create account/i });
-    fireEvent.click(submitBtn);
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() => {
-      expect(apiSpy).toHaveBeenCalledWith(
-        "/api/v1/auth/register",
-        undefined,
-        expect.objectContaining({ method: "POST" }),
-      );
-      expect(apiSpy).toHaveBeenCalledWith(
-        "/api/v1/auth/login",
-        undefined,
-        expect.objectContaining({ method: "POST" }),
-      );
-      expect(localStorage.getItem("sprintsmith_access_token")).toBe("new-user-token");
+      expect(localStorage.getItem("sprintsmith_access_token")).toBe("member-token");
+      expect(screen.getByText("New Engineer")).toBeInTheDocument();
     });
+    expect(screen.queryByRole("button", { name: "Admin" })).not.toBeInTheDocument();
+    expect(apiSpy.mock.calls.some(([path]) => String(path).includes("/auth/register"))).toBe(false);
   });
 
   it("displays error message when login fails", async () => {
@@ -150,7 +121,7 @@ describe("Workspace - Authentication", () => {
     fireEvent.change(screen.getByLabelText(/email address/i), {
       target: { value: "wrong@test.com" },
     });
-    fireEvent.change(screen.getByLabelText(/password/i), {
+    fireEvent.change(screen.getByLabelText("Password"), {
       target: { value: "wrongpassword" },
     });
 

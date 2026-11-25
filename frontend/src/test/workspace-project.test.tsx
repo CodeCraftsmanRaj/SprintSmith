@@ -30,12 +30,8 @@ describe("Workspace - Project Management", () => {
       expect(screen.getByRole("heading", { name: "Start with a project" })).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText(/Create a project to organize requirements/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /create your first project/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Create a project to organize requirements/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /create your first project/i })).toBeInTheDocument();
   });
 
   it("opens create project modal and validates required project name", async () => {
@@ -48,7 +44,9 @@ describe("Workspace - Project Management", () => {
     render(<Workspace />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /create your first project/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /create your first project/i }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /create your first project/i }));
@@ -98,7 +96,9 @@ describe("Workspace - Project Management", () => {
     render(<Workspace />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /create your first project/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /create your first project/i }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /create your first project/i }));
@@ -148,7 +148,9 @@ describe("Workspace - Project Management", () => {
     render(<Workspace />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /create your first project/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /create your first project/i }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /create your first project/i }));
@@ -240,7 +242,8 @@ describe("Workspace - Project Management", () => {
       if (path === "/api/v1/projects/project-grafana/monitoring-dashboard") {
         return Promise.resolve({
           available: true,
-          dashboard_url: "https://grafana.example.com/d/sprintsmith/sprintsmith?var-project_id=project-grafana",
+          dashboard_url:
+            "https://grafana.example.com/d/sprintsmith/sprintsmith?var-project_id=project-grafana",
           message: null,
         });
       }
@@ -249,7 +252,9 @@ describe("Workspace - Project Management", () => {
 
     render(<Workspace />);
 
-    const dashboardLink = await screen.findByRole("link", { name: /open grafana dashboard for grafana project/i });
+    const dashboardLink = await screen.findByRole("link", {
+      name: /open grafana dashboard for grafana project/i,
+    });
     expect(dashboardLink).toHaveAttribute(
       "href",
       "https://grafana.example.com/d/sprintsmith/sprintsmith?var-project_id=project-grafana",

@@ -4,13 +4,63 @@ const card = "rounded-lg bg-surface-container-low border border-outline-variant/
 const chip = "font-label-sm text-label-sm px-1.5 py-0.5 rounded";
 
 const prompts = [
-  { id: "pm_generate", name: "User Story Synthesis", type: "user_story", ver: "v3.2", score: "0.94", model: "Llama-3.1-70B", active: true },
-  { id: "qa_gherkin", name: "Gherkin Acceptance Criteria", type: "acceptance_criteria", ver: "v2.8", score: "0.91", model: "Llama-3.1-70B" },
-  { id: "qa_testcases", name: "Test Case & Data Generator", type: "test_cases", ver: "v2.1", score: "0.88", model: "Llama-3.1-70B" },
-  { id: "api_openapi", name: "OpenAPI 3.1 Contract", type: "api_spec", ver: "v1.9", score: "0.90", model: "Mixtral-8x7B" },
-  { id: "arch_adr", name: "Architecture Decision Record", type: "architecture", ver: "v1.4", score: "0.86", model: "Llama-3.1-70B" },
-  { id: "plan_estimate", name: "Sprint Story Point Estimation", type: "estimation", ver: "v1.2", score: "0.83", model: "Llama-3.1-8B" },
-  { id: "qa_judge", name: "QA Judge — Heuristic Evaluator", type: "evaluation", ver: "v2.0", score: "0.89", model: "Llama-3.1-70B" },
+  {
+    id: "pm_generate",
+    name: "User Story Synthesis",
+    type: "user_story",
+    ver: "v3.2",
+    score: "0.94",
+    model: "Llama-3.1-70B",
+    active: true,
+  },
+  {
+    id: "qa_gherkin",
+    name: "Gherkin Acceptance Criteria",
+    type: "acceptance_criteria",
+    ver: "v2.8",
+    score: "0.91",
+    model: "Llama-3.1-70B",
+  },
+  {
+    id: "qa_testcases",
+    name: "Test Case & Data Generator",
+    type: "test_cases",
+    ver: "v2.1",
+    score: "0.88",
+    model: "Llama-3.1-70B",
+  },
+  {
+    id: "api_openapi",
+    name: "OpenAPI 3.1 Contract",
+    type: "api_spec",
+    ver: "v1.9",
+    score: "0.90",
+    model: "Mixtral-8x7B",
+  },
+  {
+    id: "arch_adr",
+    name: "Architecture Decision Record",
+    type: "architecture",
+    ver: "v1.4",
+    score: "0.86",
+    model: "Llama-3.1-70B",
+  },
+  {
+    id: "plan_estimate",
+    name: "Sprint Story Point Estimation",
+    type: "estimation",
+    ver: "v1.2",
+    score: "0.83",
+    model: "Llama-3.1-8B",
+  },
+  {
+    id: "qa_judge",
+    name: "QA Judge — Heuristic Evaluator",
+    type: "evaluation",
+    ver: "v2.0",
+    score: "0.89",
+    model: "Llama-3.1-70B",
+  },
 ];
 
 const list = prompts
@@ -52,7 +102,12 @@ const versions = [
   ["v2.4", "Few-shot BFSI examples", "0.84", "1mo ago"],
 ]
   .map(
-    ([v, d, s, t]) => `<div class="flex items-center justify-between py-1.5 border-b border-outline-variant/20 last:border-0">
+    ([
+      v,
+      d,
+      s,
+      t,
+    ]) => `<div class="flex items-center justify-between py-1.5 border-b border-outline-variant/20 last:border-0">
   <div class="flex items-center gap-space-sm"><span class="font-label-sm text-label-sm text-primary">${v}</span><span class="font-body-sm text-body-sm text-on-surface-variant">${d}</span></div>
   <div class="flex items-center gap-space-sm"><span class="font-label-sm text-label-sm text-on-surface">${s}</span><span class="font-label-sm text-label-sm text-outline">${t}</span></div></div>`,
   )
@@ -93,9 +148,15 @@ const main = `
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
       <div class="${card} p-space-md">
         <p class="font-label-sm text-label-sm uppercase tracking-wider text-outline mb-space-sm">Evaluation (golden set · 120 cases)</p>
-        ${[["Faithfulness", 96], ["INVEST compliance", 94], ["Schema validity", 100], ["Traceability recall", 88]]
+        ${[
+          ["Faithfulness", 96],
+          ["INVEST compliance", 94],
+          ["Schema validity", 100],
+          ["Traceability recall", 88],
+        ]
           .map(
-            ([k, v]) => `<div class="mb-space-sm"><div class="flex justify-between font-label-sm text-label-sm mb-1"><span class="text-on-surface-variant">${k}</span><span class="text-on-surface">${v}%</span></div><div class="h-1.5 rounded-full bg-surface-container-highest"><div class="h-1.5 rounded-full bg-primary-container" style="width:${v}%"></div></div></div>`,
+            ([k, v]) =>
+              `<div class="mb-space-sm"><div class="flex justify-between font-label-sm text-label-sm mb-1"><span class="text-on-surface-variant">${k}</span><span class="text-on-surface">${v}%</span></div><div class="h-1.5 rounded-full bg-surface-container-highest"><div class="h-1.5 rounded-full bg-primary-container" style="width:${v}%"></div></div></div>`,
           )
           .join("")}
       </div>

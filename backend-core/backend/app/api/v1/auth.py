@@ -16,17 +16,13 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreate, auth_service: AuthService = Depends(get_auth_service)):
     try:
-        user = auth_service.register(
+        # Public registration always creates a member. Privileged roles are
+        # assigned by an administrator or an out-of-band bootstrap process.
+        return auth_service.register(
             email=payload.email,
             full_name=payload.full_name,
             password=payload.password,
         )
-        # If a custom role was passed in payload, assign it
-        if hasattr(payload, "role") and payload.role:
-            user.role = payload.role.lower()
-            auth_service.user_repo.commit()
-            auth_service.user_repo.refresh(user)
-        return user
     except ConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 

@@ -15,7 +15,16 @@ const story = {
   id: "a1",
   artifact_type: "user_story",
   title: "Transfer funds",
-  content: { stories: [{ id: "US-1", title: "Make a transfer", story: "As a customer, I can transfer funds.", priority: "P1" }] },
+  content: {
+    stories: [
+      {
+        id: "US-1",
+        title: "Make a transfer",
+        story: "As a customer, I can transfer funds.",
+        priority: "P1",
+      },
+    ],
+  },
   version: 1,
   created_at: "2026-10-02T00:00:00Z",
 };
@@ -65,14 +74,23 @@ describe("Workspace loading and artifact details", () => {
       ...story,
       id: "a2",
       title: "Customer transfer story",
-      content: { stories: [{ id: "US-2", title: "Submit a transfer", story: "As a customer, I can submit a transfer." }] },
+      content: {
+        stories: [
+          {
+            id: "US-2",
+            title: "Submit a transfer",
+            story: "As a customer, I can submit a transfer.",
+          },
+        ],
+      },
     };
     const apiSpy = mockWorkspace().mockImplementation((path, _token, init) => {
       if (path === "/api/v1/auth/me") return Promise.resolve(user);
       if (path === "/api/v1/projects") return Promise.resolve([project]);
       if (path === "/api/v1/projects/p1/requirements") return Promise.resolve([]);
       if (path === "/api/v1/projects/p1/artifacts") return Promise.resolve([]);
-      if (path === "/api/v1/projects/p1/generate" && init?.method === "POST") return Promise.resolve(generated);
+      if (path === "/api/v1/projects/p1/generate" && init?.method === "POST")
+        return Promise.resolve(generated);
       return Promise.resolve({});
     });
     render(<Workspace />);
@@ -81,13 +99,21 @@ describe("Workspace loading and artifact details", () => {
     fireEvent.click(screen.getByRole("button", { name: /Generate Artifact/i }));
     fireEvent.click(screen.getByRole("button", { name: /user story/i }));
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
-    fireEvent.change(screen.getByLabelText(/Feature \/ Initiative Title/i), { target: { value: "Customer transfer" } });
+    fireEvent.change(screen.getByLabelText(/Feature \/ Initiative Title/i), {
+      target: { value: "Customer transfer" },
+    });
     fireEvent.change(screen.getByLabelText(/Actor \/ Role/i), { target: { value: "Customer" } });
     fireEvent.change(screen.getByLabelText(/^Goal/i), { target: { value: "Submit a transfer" } });
-    fireEvent.change(screen.getByLabelText(/Business Benefit/i), { target: { value: "Move money quickly" } });
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "P1 - High" } });
+    fireEvent.change(screen.getByLabelText(/Business Benefit/i), {
+      target: { value: "Move money quickly" },
+    });
+    fireEvent.change(within(screen.getByRole("dialog")).getByRole("combobox"), {
+      target: { value: "P1 - High" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /preview prompt/i }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /generate artifact/i }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /generate artifact/i }),
+    );
 
     await waitFor(() => {
       expect(apiSpy).toHaveBeenCalledWith(
@@ -117,6 +143,8 @@ describe("Workspace loading and artifact details", () => {
     expect(createObjectUrl).toHaveBeenCalledOnce();
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:test-artifact");
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    await waitFor(() => expect(screen.queryByRole("heading", { name: "Transfer funds" })).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole("heading", { name: "Transfer funds" })).not.toBeInTheDocument(),
+    );
   });
 });

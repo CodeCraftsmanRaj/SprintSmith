@@ -29,8 +29,6 @@ describe("static screen templates", () => {
     expect(shellModule.shell("overview", "<h1>Overview panel</h1>")).toContain(
       'aria-current="page" class=',
     );
-    expect(shellModule.shell("overview", "<h1>Overview panel</h1>")).toContain(
-      "Overview panel",
-    );
+    expect(shellModule.shell("overview", "<h1>Overview panel</h1>")).toContain("Overview panel");
   });
 });

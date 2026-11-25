@@ -52,7 +52,11 @@ export function Screen({
 
   return (
     <>
-      <div ref={ref} className={`min-h-screen ${bodyClass}`} dangerouslySetInnerHTML={{ __html: html }} />
+      <div
+        ref={ref}
+        className={`min-h-screen ${bodyClass}`}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
       {slot && children ? createPortal(children, slot) : null}
     </>
   );

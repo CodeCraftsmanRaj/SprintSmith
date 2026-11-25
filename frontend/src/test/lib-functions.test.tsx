@@ -78,10 +78,7 @@ describe("normalizeEstimate", () => {
 // ============================================================
 // describeError + consumeLastCapturedError
 // ============================================================
-import {
-  describeError,
-  consumeLastCapturedError,
-} from "@/lib/error-capture";
+import { describeError, consumeLastCapturedError } from "@/lib/error-capture";
 
 describe("describeError", () => {
   it("returns message for Error", () => {
@@ -105,7 +102,7 @@ describe("describeError", () => {
   });
 
   it("includes status for HTTP-like errors", () => {
-    const err: any = new Error("HTTP error");
+    const err = new Error("HTTP error") as Error & { status?: number };
     err.status = 500;
     expect(describeError(err)).toContain("(status 500)");
   });
@@ -136,7 +133,7 @@ describe("reportLovableError", () => {
       __lovableEvents: undefined,
       __lovableReportRuntimeError: undefined,
       location: { pathname: "/test" },
-    } as any);
+    });
   });
 
   afterEach(() => {
@@ -153,7 +150,7 @@ describe("reportLovableError", () => {
       __lovableEvents: { captureException },
       __lovableReportRuntimeError: undefined,
       location: { pathname: "/test" },
-    } as any);
+    });
 
     reportLovableError(new Error("test error"), { key: "value" });
     expect(captureException).toHaveBeenCalled();
@@ -179,12 +176,19 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 describe("useIsMobile", () => {
   beforeEach(() => {
-    vi.stubGlobal("matchMedia", vi.fn(() => ({
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      matches: false,
-    })));
-    Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: 1024 });
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        matches: false,
+      })),
+    );
+    Object.defineProperty(window, "innerWidth", {
+      writable: true,
+      configurable: true,
+      value: 1024,
+    });
   });
 
   afterEach(() => {
@@ -202,7 +206,10 @@ describe("useIsMobile", () => {
       removeEventListener: vi.fn(),
       matches: false,
     };
-    vi.stubGlobal("matchMedia", vi.fn(() => mockMql));
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => mockMql),
+    );
     Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: 500 });
     const { result } = renderHook(() => useIsMobile());
     expect(mockMql.addEventListener).toHaveBeenCalledWith("change", expect.any(Function));

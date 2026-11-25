@@ -14,9 +14,7 @@ describe("Screen component", () => {
 
   it("renders html and applies bodyClass", () => {
     const html = `<main><h1>Docling Pipeline</h1><p>Ingestion view</p></main>`;
-    const { container } = render(
-      <Screen html={html} bodyClass="bg-dark-workspace antialiased" />,
-    );
+    const { container } = render(<Screen html={html} bodyClass="bg-dark-workspace antialiased" />);
 
     expect(screen.getByRole("heading", { name: "Docling Pipeline" })).toBeInTheDocument();
     expect(screen.getByText("Ingestion view")).toBeInTheDocument();

@@ -65,23 +65,33 @@ describe("estimateWithAi", () => {
   ])("maps gateway status %i to a useful error", async (status, message) => {
     await estimateWithAi("Story", "Details");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status })));
-    await expect(mocks.fetcher!("https://gateway.test", { headers: {} })).rejects.toMatchObject({ status, message });
+    await expect(mocks.fetcher!("https://gateway.test", { headers: {} })).rejects.toMatchObject({
+      status,
+      message,
+    });
   });
 
   it("adds the run id to later gateway requests", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response("", { status: 200, headers: { "X-Lovable-AIG-Run-ID": "run-123" } }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("", { status: 200, headers: { "X-Lovable-AIG-Run-ID": "run-123" } }),
+      )
       .mockResolvedValueOnce(new Response("", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     await estimateWithAi("Story", "Details");
     await mocks.fetcher!("https://gateway.test", { headers: {} });
     await mocks.fetcher!("https://gateway.test", { headers: {} });
-    expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get("X-Lovable-AIG-Run-ID")).toBe("run-123");
+    expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get("X-Lovable-AIG-Run-ID")).toBe(
+      "run-123",
+    );
   });
 
   it("preserves nested AI errors and wraps unknown failures", async () => {
     const aiError = new AiError("already classified", 429);
-    mocks.output = Promise.reject(new Error("wrapper", { cause: new Error("inner", { cause: aiError }) }));
+    mocks.output = Promise.reject(
+      new Error("wrapper", { cause: new Error("inner", { cause: aiError }) }),
+    );
     await expect(estimateWithAi("Story", "Details")).rejects.toBe(aiError);
 
     mocks.output = Promise.reject(new Error("bad response"));

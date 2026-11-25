@@ -3,7 +3,10 @@ import { Output, streamText } from "ai";
 import { estimateSchema, normalizeEstimate, type Estimate } from "./estimate";
 
 export class AiError extends Error {
-  constructor(message: string, public status: number) {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
     super(message);
     this.name = "AiError";
   }
@@ -22,8 +25,10 @@ export async function estimateWithAi(title: string, description: string): Promis
       if (runId) headers.set("X-Lovable-AIG-Run-ID", runId);
       const res = await fetch(input, { ...init, headers });
       runId ??= res.headers.get("X-Lovable-AIG-Run-ID") ?? undefined;
-      if (res.status === 402) throw new AiError("AI credits have run out. Add credits to keep estimating.", 402);
-      if (res.status === 429) throw new AiError("Too many requests right now. Please try again in a minute.", 429);
+      if (res.status === 402)
+        throw new AiError("AI credits have run out. Add credits to keep estimating.", 402);
+      if (res.status === 429)
+        throw new AiError("Too many requests right now. Please try again in a minute.", 429);
       if (res.status === 403) throw new AiError("The AI request was not allowed.", 403);
       return res;
     },
@@ -33,7 +38,9 @@ export async function estimateWithAi(title: string, description: string): Promis
     maxRetries: 0,
     instructions:
       "You are an agile estimation assistant for a banking engineering team. Estimate the user story in Fibonacci story points (1,2,3,5,8,13,21), give a confidence between 0 and 1, a 1-3 sentence rationale, a one-sentence risk note, and 3-6 acceptance criteria written as 'Given … When … Then …'.",
-    messages: [{ role: "user", content: `Title: ${title}\n\nDescription:\n${description || "(none)"}` }],
+    messages: [
+      { role: "user", content: `Title: ${title}\n\nDescription:\n${description || "(none)"}` },
+    ],
     output: Output.object({ schema: estimateSchema }),
     providerOptions: {
       openai: {
@@ -50,7 +57,8 @@ export async function estimateWithAi(title: string, description: string): Promis
     return normalizeEstimate(out);
   } catch (e) {
     let err: unknown = e;
-    while (err && !(err instanceof AiError) && (err as { cause?: unknown }).cause) err = (err as { cause?: unknown }).cause;
+    while (err && !(err instanceof AiError) && (err as { cause?: unknown }).cause)
+      err = (err as { cause?: unknown }).cause;
     if (err instanceof AiError) throw err;
     console.error(e);
     throw new AiError("The AI could not produce an estimate. Try adding more detail.", 500);

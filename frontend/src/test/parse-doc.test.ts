@@ -28,7 +28,9 @@ Final summary.`;
 
     // Children of Project Title: paragraph intro, Section 1, Section 2
     const rootChildren = tree[0].children!;
-    expect(rootChildren.some((c) => c.type === "paragraph" && c.label.includes("intro"))).toBe(true);
+    expect(rootChildren.some((c) => c.type === "paragraph" && c.label.includes("intro"))).toBe(
+      true,
+    );
 
     const sec1 = rootChildren.find((c) => c.label === "Section 1");
     expect(sec1).toBeDefined();

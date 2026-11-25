@@ -207,9 +207,12 @@ describe("Workspace - Pages, Forms, Ingest and Navigation", () => {
       );
     });
 
-    await waitFor(() => {
-      expect(screen.getByText("Requirement indexed and ready.")).toBeInTheDocument();
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(screen.getByText("Requirement indexed and ready.")).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
   });
 
   it("uploads a requirement document as multipart form data and polls indexing", async () => {
@@ -225,20 +228,31 @@ describe("Workspace - Pages, Forms, Ingest and Navigation", () => {
       return Promise.resolve({});
     });
     const nativeSetTimeout = window.setTimeout.bind(window);
-    vi.spyOn(window, "setTimeout").mockImplementation(((handler: TimerHandler, timeout?: number, ...args: unknown[]) =>
-      nativeSetTimeout(handler, timeout === 1500 ? 0 : timeout, ...args)) as typeof window.setTimeout);
+    vi.spyOn(window, "setTimeout").mockImplementation(((
+      handler: TimerHandler,
+      timeout?: number,
+      ...args: unknown[]
+    ) =>
+      nativeSetTimeout(
+        handler,
+        timeout === 1500 ? 0 : timeout,
+        ...args,
+      )) as typeof window.setTimeout);
     render(<Workspace />);
 
     await screen.findByRole("heading", { name: "Project overview" });
     fireEvent.click(screen.getAllByRole("button", { name: /Requirements/i })[0]);
-    const file = new File(["# Payment requirements"], "payment-requirements.md", { type: "text/markdown" });
+    const file = new File(["# Payment requirements"], "payment-requirements.md", {
+      type: "text/markdown",
+    });
     fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [file] } });
     expect(screen.getByRole("button", { name: /Submit requirement/i })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: /Submit requirement/i }));
 
     await screen.findByText("Requirement indexed and ready.", {}, { timeout: 3000 });
-    const uploadCall = apiSpy.mock.calls.find(([path, , init]) =>
-      path === `/api/v1/projects/${mockProject.id}/requirements` && init?.method === "POST",
+    const uploadCall = apiSpy.mock.calls.find(
+      ([path, , init]) =>
+        path === `/api/v1/projects/${mockProject.id}/requirements` && init?.method === "POST",
     );
     expect(uploadCall).toBeDefined();
     const body = uploadCall?.[2]?.body;
@@ -278,9 +292,12 @@ describe("Workspace - Pages, Forms, Ingest and Navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Submit requirement/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText("Docling parser syntax error")).toBeInTheDocument();
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(screen.getByText("Docling parser syntax error")).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
   });
 
   it("filters artifacts by search term in Artifacts page", async () => {
@@ -308,7 +325,7 @@ describe("Workspace - Pages, Forms, Ingest and Navigation", () => {
 
     // Search something with no matches
     fireEvent.change(searchInput, { target: { value: "NonExistentDeliverable" } });
-    expect(screen.getByText("No artifacts yet")).toBeInTheDocument();
+    expect(screen.getByText("No artifacts match the current filters.")).toBeInTheDocument();
   });
 
   it("renders generated artifact and requirement entries in the Activity timeline", async () => {

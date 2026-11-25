@@ -10,7 +10,16 @@ describe("App routing", () => {
   it("matches every registered page route", () => {
     const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
 
-    for (const path of ["/", "/audit", "/login", "/overview", "/plan", "/prompts", "/synthesize", "/verify"]) {
+    for (const path of [
+      "/",
+      "/audit",
+      "/login",
+      "/overview",
+      "/plan",
+      "/prompts",
+      "/synthesize",
+      "/verify",
+    ]) {
       const matches = router.matchRoutes(path);
       expect(matches.at(-1)?.routeId, `route ${path}`).not.toBe(rootRouteId);
     }

@@ -31,7 +31,7 @@ describe("AlertDialog", () => {
             <AlertDialogAction>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog>,
     );
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
     expect(screen.queryByText("Are you sure?")).not.toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("Breadcrumb", () => {
             <BreadcrumbPage>Dashboard</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
-      </Breadcrumb>
+      </Breadcrumb>,
     );
     expect(screen.getByText("Home")).toBeInTheDocument();
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe("ContextMenu", () => {
         <ContextMenuContent>
           <ContextMenuItem>Action</ContextMenuItem>
         </ContextMenuContent>
-      </ContextMenu>
+      </ContextMenu>,
     );
     expect(screen.getByText("Right click me")).toBeInTheDocument();
     expect(screen.queryByText("Action")).not.toBeInTheDocument();
@@ -144,7 +144,7 @@ describe("Dialog", () => {
           </DialogHeader>
           <DialogFooter>Footer</DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>,
     );
     expect(screen.getByRole("button", { name: "Open" })).toBeInTheDocument();
     expect(screen.queryByText("Dialog Title")).not.toBeInTheDocument();
@@ -175,7 +175,7 @@ describe("Drawer", () => {
             <DrawerDescription>Description</DrawerDescription>
           </DrawerHeader>
         </DrawerContent>
-      </Drawer>
+      </Drawer>,
     );
     expect(screen.getByRole("button", { name: "Open Drawer" })).toBeInTheDocument();
   });
@@ -199,7 +199,7 @@ describe("DropdownMenu", () => {
         <DropdownMenuContent>
           <DropdownMenuItem>Item 1</DropdownMenuItem>
         </DropdownMenuContent>
-      </DropdownMenu>
+      </DropdownMenu>,
     );
     expect(screen.getByText("Options")).toBeInTheDocument();
     expect(screen.queryByText("Item 1")).not.toBeInTheDocument();
@@ -217,7 +217,7 @@ describe("HoverCard", () => {
       <HoverCard>
         <HoverCardTrigger>Hover me</HoverCardTrigger>
         <HoverCardContent>Hover content</HoverCardContent>
-      </HoverCard>
+      </HoverCard>,
     );
     expect(screen.getByText("Hover me")).toBeInTheDocument();
     expect(screen.queryByText("Hover content")).not.toBeInTheDocument();
@@ -240,7 +240,7 @@ describe("InputOTP", () => {
             <InputOTPSlot />
             <InputOTPSlot />
           </InputOTPGroup>
-        </InputOTP>
+        </InputOTP>,
       );
     }).not.toThrow();
   });
@@ -267,7 +267,7 @@ describe("Menubar", () => {
             <MenubarItem>New</MenubarItem>
           </MenubarContent>
         </MenubarMenu>
-      </Menubar>
+      </Menubar>,
     );
     expect(screen.getByText("File")).toBeInTheDocument();
   });
@@ -297,7 +297,7 @@ describe("NavigationMenu", () => {
             </NavigationMenuContent>
           </NavigationMenuItem>
         </NavigationMenuList>
-      </NavigationMenu>
+      </NavigationMenu>,
     );
     expect(screen.getByText("Products")).toBeInTheDocument();
   });
@@ -314,7 +314,7 @@ describe("Popover", () => {
       <Popover>
         <PopoverTrigger>More</PopoverTrigger>
         <PopoverContent>Popover content</PopoverContent>
-      </Popover>
+      </Popover>,
     );
     expect(screen.getByText("More")).toBeInTheDocument();
     expect(screen.queryByText("Popover content")).not.toBeInTheDocument();
@@ -332,7 +332,7 @@ describe("ScrollArea", () => {
       <ScrollArea className="h-64 w-64">
         <ScrollBar />
         <div style={{ height: "2000px" }}>Tall content</div>
-      </ScrollArea>
+      </ScrollArea>,
     );
     expect(screen.getByText("Tall content")).toBeInTheDocument();
   });
@@ -359,7 +359,7 @@ describe("Select", () => {
         <SelectContent>
           <SelectItem value="option-1">Option 1</SelectItem>
         </SelectContent>
-      </Select>
+      </Select>,
     );
     expect(screen.getByText("Option 1")).toBeInTheDocument();
   });
@@ -401,7 +401,7 @@ describe("Sheet", () => {
             <SheetDescription>Description</SheetDescription>
           </SheetHeader>
         </SheetContent>
-      </Sheet>
+      </Sheet>,
     );
     expect(screen.getByRole("button", { name: "Open Sheet" })).toBeInTheDocument();
   });
@@ -420,7 +420,7 @@ describe("Slider", () => {
           <SliderThumb />
         </SliderTrack>
         <SliderInput />
-      </Slider>
+      </Slider>,
     );
     expect(screen.getByRole("slider")).toBeInTheDocument();
   });
@@ -437,7 +437,7 @@ describe("ToggleGroup", () => {
       <ToggleGroup type="single" defaultValue="a">
         <ToggleGroupItem value="a">A</ToggleGroupItem>
         <ToggleGroupItem value="b">B</ToggleGroupItem>
-      </ToggleGroup>
+      </ToggleGroup>,
     );
     expect(screen.getByText("A")).toBeInTheDocument();
     expect(screen.getByText("B")).toBeInTheDocument();
@@ -457,7 +457,7 @@ describe("Tooltip", () => {
           <TooltipTrigger>Hover me</TooltipTrigger>
           <TooltipContent>Tooltip content</TooltipContent>
         </Tooltip>
-      </TooltipProvider>
+      </TooltipProvider>,
     );
     expect(screen.getByText("Hover me")).toBeInTheDocument();
   });

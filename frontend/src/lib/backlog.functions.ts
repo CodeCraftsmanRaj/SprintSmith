@@ -5,7 +5,9 @@ import { snapToFibonacci } from "./estimate";
 
 export const estimateStory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ title: z.string().min(3).max(200), description: z.string().max(4000) }).parse(d))
+  .inputValidator((d) =>
+    z.object({ title: z.string().min(3).max(200), description: z.string().max(4000) }).parse(d),
+  )
   .handler(async ({ data }) => {
     const { estimateWithAi, AiError } = await import("./ai-estimate.server");
     try {
@@ -46,7 +48,11 @@ export const listStories = createServerFn({ method: "GET" })
       .select("id,title,points,confidence,criteria,created_at")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    return data.map((s) => ({ ...s, confidence: Number(s.confidence ?? 0), criteria: (s.criteria ?? []) as string[] }));
+    return data.map((s) => ({
+      ...s,
+      confidence: Number(s.confidence ?? 0),
+      criteria: (s.criteria ?? []) as string[],
+    }));
   });
 
 export const deleteStory = createServerFn({ method: "POST" })
