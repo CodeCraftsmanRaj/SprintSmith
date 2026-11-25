@@ -13,6 +13,13 @@ def upgrade():
     if not inspector.has_table("artifacts"):
         return
     cols = {column["name"] for column in inspector.get_columns("artifacts")}
+    indexes = {index["name"] for index in inspector.get_indexes("artifacts")}
+    foreign_keys = inspector.get_foreign_keys("artifacts")
+    has_assignee_fk = any(
+        fk.get("constrained_columns") == ["assigned_to"]
+        and fk.get("referred_table") == "users"
+        for fk in foreign_keys
+    )
     with op.batch_alter_table("artifacts") as batch:
         additions = (
             ("status", sa.String(32), "backlog"),
@@ -25,12 +32,20 @@ def upgrade():
             if name not in cols:
                 batch.add_column(sa.Column(name, typ, nullable=default is None,
                                            server_default=default))
-        batch.create_index("ix_artifacts_status", ["status"], unique=False)
-        batch.create_index("ix_artifacts_priority", ["priority"], unique=False)
-        batch.create_index("ix_artifacts_category", ["category"], unique=False)
-        batch.create_index("ix_artifacts_assigned_to", ["assigned_to"], unique=False)
-        batch.create_index("ix_artifacts_sort_order", ["sort_order"], unique=False)
-        batch.create_foreign_key("fk_artifacts_assigned_to_users", "users", ["assigned_to"], ["id"], ondelete="SET NULL")
+        for name, columns in (
+            ("ix_artifacts_status", ["status"]),
+            ("ix_artifacts_priority", ["priority"]),
+            ("ix_artifacts_category", ["category"]),
+            ("ix_artifacts_assigned_to", ["assigned_to"]),
+            ("ix_artifacts_sort_order", ["sort_order"]),
+        ):
+            if name not in indexes:
+                batch.create_index(name, columns, unique=False)
+        if not has_assignee_fk:
+            batch.create_foreign_key(
+                "fk_artifacts_assigned_to_users", "users", ["assigned_to"], ["id"],
+                ondelete="SET NULL",
+            )
 
     if not inspector.has_table("artifact_status_history"):
         op.create_table(

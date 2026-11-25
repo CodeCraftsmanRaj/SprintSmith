@@ -2,7 +2,7 @@
 
 from app.domain.schemas.artifact import ArtifactOut, ArtifactUpdate, GenerateRequest
 from app.domain.schemas.auth import LoginRequest, Token, UserCreate, UserOut
-from app.domain.schemas.evaluation import EvaluationCreate
+from app.domain.schemas.evaluation import EvaluationBaselineCreate, EvaluationCreate
 from app.domain.schemas.project import (
     ProjectCreate,
     ProjectMonitoringDashboard,
@@ -14,6 +14,7 @@ __all__ = [
     "ArtifactOut",
     "ArtifactUpdate",
     "EvaluationCreate",
+    "EvaluationBaselineCreate",
     "GenerateRequest",
     "LoginRequest",
     "ProjectCreate",
