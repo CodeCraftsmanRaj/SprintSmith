@@ -4,10 +4,11 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_role
-from app.domain.models import PromptVersion, User
+from app.domain.models import GenerationHistory, PromptVersion, User
 from app.services.ai_engine import AIEngineClient
 
 router = APIRouter(prefix="/prompts", tags=["Prompts"])
@@ -39,6 +40,92 @@ _ORCHESTRATION_NODES = {
     "analyst", "story_writer", "ac_generator", "test_case_writer",
     "api_spec", "architecture", "sprint_plan",
 }
+
+
+@router.get("/executions")
+def prompt_execution_history(
+    limit: int = Query(default=100, ge=1, le=500),
+    artifact_type: str | None = Query(default=None, max_length=80),
+    prompt_version: str | None = Query(default=None, max_length=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("admin")),
+):
+    """Recent prompt-backed generation runs, newest first."""
+    stmt = select(GenerationHistory).order_by(GenerationHistory.created_at.desc())
+    if artifact_type:
+        stmt = stmt.where(GenerationHistory.artifact_type == artifact_type)
+    if prompt_version:
+        stmt = stmt.where(GenerationHistory.prompt_version == prompt_version)
+    rows = db.scalars(stmt.limit(limit)).all()
+    return {"executions": [
+        {
+            "id": row.id,
+            "project_id": row.project_id,
+            "artifact_id": row.artifact_id,
+            "user_id": row.user_id,
+            "requirement_id": row.requirement_id,
+            "artifact_type": row.artifact_type,
+            "prompt_version": row.prompt_version,
+            "usage": row.usage or {},
+            "latency_ms": row.latency_ms,
+            "eval_score": row.eval_score,
+            "retry_count": row.retry_count,
+            "model_used": row.model_used,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]}
+
+
+@router.get("/analytics")
+def prompt_performance_analytics(
+    artifact_type: str | None = Query(default=None, max_length=80),
+    prompt_version: str | None = Query(default=None, max_length=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("admin")),
+):
+    """Aggregate latency, judge score, retries, and token usage by prompt version."""
+    stmt = select(GenerationHistory)
+    if artifact_type:
+        stmt = stmt.where(GenerationHistory.artifact_type == artifact_type)
+    if prompt_version:
+        stmt = stmt.where(GenerationHistory.prompt_version == prompt_version)
+
+    groups: dict[tuple[str, str], dict] = {}
+    for row in db.scalars(stmt).all():
+        key = (row.artifact_type, row.prompt_version)
+        group = groups.setdefault(key, {
+            "artifact_type": row.artifact_type,
+            "prompt_version": row.prompt_version,
+            "execution_count": 0,
+            "latency_ms_total": 0,
+            "eval_score_total": 0.0,
+            "eval_score_count": 0,
+            "retry_count_total": 0,
+            "input_tokens_total": 0,
+            "output_tokens_total": 0,
+        })
+        group["execution_count"] += 1
+        group["latency_ms_total"] += row.latency_ms or 0
+        group["retry_count_total"] += row.retry_count or 0
+        if row.eval_score is not None:
+            group["eval_score_total"] += row.eval_score
+            group["eval_score_count"] += 1
+        usage = row.usage or {}
+        group["input_tokens_total"] += int(usage.get("input_tokens", 0) or 0)
+        group["output_tokens_total"] += int(usage.get("output_tokens", 0) or 0)
+
+    analytics = []
+    for group in groups.values():
+        count = group["execution_count"]
+        score_count = group.pop("eval_score_count")
+        score_total = group.pop("eval_score_total")
+        group["average_latency_ms"] = round(group["latency_ms_total"] / count, 2)
+        group["average_eval_score"] = round(score_total / score_count, 4) if score_count else None
+        group["average_retries"] = round(group["retry_count_total"] / count, 2)
+        analytics.append(group)
+    analytics.sort(key=lambda row: (row["artifact_type"], row["prompt_version"]))
+    return {"analytics": analytics}
 
 
 @router.post("/orchestration/{node_id}/versions", status_code=201)

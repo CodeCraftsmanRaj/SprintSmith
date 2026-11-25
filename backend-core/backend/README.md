@@ -39,7 +39,7 @@ Prerequisites: Docker running; `backend/.venv` and `ai-engine/.venv` installed (
 
 ## API overview
 
-- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
+- `POST /api/v1/auth/login`, `POST /api/v1/auth/admin/login`, `POST /api/v1/auth/password-reset`, `GET /api/v1/auth/me` (public registration is disabled)
 - `GET /api/v1/artifact-types`
 - Project CRUD: `GET/POST /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/{id}`, and `POST /api/v1/projects/{id}/members?email=...&role=viewer|editor`
 - Requirements: `POST /api/v1/projects/{id}/requirements` (multipart; **202** `{id, ingest_job_id, status}`), `GET /api/v1/projects/{id}/requirements`, `GET /api/v1/requirements/{id}`, `GET /api/v1/ingest-jobs/{job_id}` (poll until `done`/`failed`)
@@ -47,9 +47,10 @@ Prerequisites: Docker running; `backend/.venv` and `ai-engine/.venv` installed (
 - Artifacts: `GET /api/v1/projects/{id}/artifacts`, `GET/PATCH /api/v1/artifacts/{id}`, `GET /api/v1/artifacts/{id}/export?format=json|markdown|csv|yaml` (user_story CSV uses JIRA columns)
 - History, evaluations, traceability: `GET /api/v1/projects/{id}/history` (includes eval telemetry), `POST/GET /api/v1/artifacts/{id}/evaluations`, `GET /api/v1/projects/{id}/traceability` (React Flow nodes/edges)
 - Admin-only: `GET /api/v1/audit-logs`, `POST /api/v1/evaluate/batch?retrieval_mode=vector|hybrid`
+- Admin-only prompt management: `GET/POST /api/v1/prompts/orchestration/...`, `GET/POST /api/v1/prompts/orchestration/{node_id}/versions`, `GET /api/v1/prompts/executions`, and `GET /api/v1/prompts/analytics`
 - `GET /health`, `GET /health/db`, `GET /health/ai`
 
-Access tokens are bearer JWTs. Users receive the `member` global role on registration; project roles are owner, editor and viewer. Promote trusted operators to global `admin` through a controlled database/operations process.
+Access tokens are bearer JWTs. Public registration is disabled. Administrators create and manage accounts through `/api/v1/admin/users`; project roles are owner, admin, editor and viewer. Prompt execution history and analytics are available to global administrators.
 
 ## Tests
 
