@@ -384,7 +384,7 @@ class ProjectService:
     def revoke_invitation(self, project_id: str, invitation_id: str, user: User) -> None:
         project = self.get_project_or_fail(project_id, user)
         self._assert_project_manager(project, user)
-        invitation = self.project_repo.get(invitation_id)
+        invitation = self.project_repo.get_invitation_by_id(invitation_id)
         if not invitation or invitation.project_id != project_id:
             raise ResourceNotFoundError("Invitation", invitation_id)
         if invitation.status != "pending":

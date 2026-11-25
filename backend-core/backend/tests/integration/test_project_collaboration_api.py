@@ -170,7 +170,7 @@ def test_expired_invitation_can_be_reissued(client, pm_headers, project_repo):
         json={"email": "expired@example.com", "role": "viewer"},
         headers=pm_headers,
     ).json()
-    invitation = project_repo.get(invited["id"])
+    invitation = project_repo.get_invitation_by_id(invited["id"])
     invitation.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
     project_repo.commit()
 
