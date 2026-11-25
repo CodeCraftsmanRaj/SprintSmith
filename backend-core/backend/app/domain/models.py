@@ -79,6 +79,28 @@ class Requirement(Base):
     content: Mapped[str] = mapped_column(Text, default="")
     doc_type: Mapped[str] = mapped_column(String(50), default="requirement")
     chunks_indexed: Mapped[int] = mapped_column(Integer, default=0)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    priority: Mapped[str] = mapped_column(String(20), default="medium", index=True)
+    review_status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    index_stale: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
+
+
+class RequirementVersion(Base):
+    """Immutable snapshot of a requirement before an edit or review decision."""
+    __tablename__ = "requirement_versions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    requirement_id: Mapped[str] = mapped_column(
+        ForeignKey("requirements.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer)
+    changed_by: Mapped[str] = mapped_column(ForeignKey(USERS_ID_FK))
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    change_summary: Mapped[str] = mapped_column(String(500), default="Requirement updated")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
 
 

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, get_project_service
-from app.domain.models import User
+from app.domain.models import Requirement, User
 from app.repositories.workflow_run_repo import WorkflowRunRepository
 from app.services.ai_engine import AIEngineClient
 from app.services.project_service import ProjectService
@@ -51,9 +51,20 @@ async def start_workflow_run(
     project_id: str,
     payload: StartWorkflowRunRequest,
     service: WorkflowRunService = Depends(_run_service),
+    db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     try:
+        if payload.requirement_id:
+            requirement = db.get(Requirement, payload.requirement_id)
+            if not requirement or requirement.project_id != project_id:
+                raise HTTPException(status_code=404, detail="Requirement not found in this project")
+            if requirement.review_status != "approved":
+                raise HTTPException(status_code=409,
+                                    detail="Requirement must be approved before generation")
+            if requirement.index_stale:
+                raise HTTPException(status_code=409,
+                                    detail="Requirement content changed and must be re-indexed before generation")
         return await service.start_run(
             project_id=project_id,
             user=user,

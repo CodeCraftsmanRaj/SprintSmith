@@ -44,6 +44,12 @@ async def generate(
             requirement = db.get(Requirement, payload.requirement_id)
             if not requirement or requirement.project_id != project_id:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found in this project")
+            if requirement.review_status != "approved":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                    detail="Requirement must be approved before generation")
+            if requirement.index_stale:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                    detail="Requirement content changed and must be re-indexed before generation")
         return await artifact_service.generate(
             project_id=project_id,
             artifact_type=payload.artifact_type,
