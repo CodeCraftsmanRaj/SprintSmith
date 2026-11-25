@@ -87,6 +87,17 @@ describe("Workspace - Pages, Forms, Ingest and Navigation", () => {
       if (path === `/api/v1/projects/${mockProject.id}/artifacts`) {
         return Promise.resolve(mockArtifacts);
       }
+      if (path === `/api/v1/projects/${mockProject.id}/members`) {
+        return Promise.resolve({ current_role: "owner" });
+      }
+      if (path === `/api/v1/projects/${mockProject.id}/activity?limit=100`) {
+        return Promise.resolve([
+          { id: "ev-art-2", action: "artifact.generate", resource_type: "artifact", details: { title: "PISP Endpoints Specification", artifact_type: "api_spec" }, created_at: "2026-08-19T16:00:00Z" },
+          { id: "ev-art-1", action: "artifact.generate", resource_type: "artifact", details: { title: "Consent Authorization Flow", artifact_type: "user_story" }, created_at: "2026-08-18T09:00:00Z" },
+          { id: "ev-req-2", action: "requirement.ingest", resource_type: "requirement", details: { filename: "payment-initiation.txt" }, created_at: "2026-08-17T14:30:00Z" },
+          { id: "ev-req-1", action: "requirement.ingest", resource_type: "requirement", details: { filename: "account-information.md" }, created_at: "2026-08-16T11:00:00Z" },
+        ]);
+      }
       return Promise.resolve({});
     });
   };
@@ -328,7 +339,7 @@ describe("Workspace - Pages, Forms, Ingest and Navigation", () => {
 
     expect(screen.getByText("Generated user story")).toBeInTheDocument();
     expect(screen.getByText("Generated api spec")).toBeInTheDocument();
-    expect(screen.getAllByText("Requirement ingested").length).toBe(2);
+    expect(screen.getAllByText("Added a requirement").length).toBe(2);
     const timeline = document.querySelector(".timeline");
     const firstEvent = timeline?.querySelector(".timeline-item");
     expect(firstEvent).toHaveTextContent("PISP Endpoints Specification");

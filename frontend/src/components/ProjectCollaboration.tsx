@@ -35,7 +35,7 @@ type ActivityItem = {
   id: string;
   action: string;
   resource_type: string;
-  details: Record<string, unknown>;
+  details: Record<string, unknown> & { title?: string; artifact_type?: string; filename?: string };
   actor_name?: string | null;
   actor_email?: string | null;
   created_at: string;
@@ -243,7 +243,7 @@ function actionLabel(action: string): string {
     "project.invitation.accepted": "Joined the project",
     "project.invitation.revoked": "Revoked an invitation",
     "requirement.ingest": "Added a requirement",
-    "artifact.generate": "Generated an artifact",
+    "artifact.generate": "Generated artifact",
     "artifact.update": "Updated an artifact",
     "artifact.evaluate": "Reviewed an artifact",
     "project.chat": "Used the project assistant",
@@ -254,7 +254,7 @@ function actionLabel(action: string): string {
 
 function activityDetail(item: ActivityItem): string {
   const details = item.details ?? {};
-  const values = [details.email, details.filename, details.role, details.version ? `v${details.version}` : null]
+  const values = [details.title, details.filename, details.email, details.role, details.version ? `v${details.version}` : null]
     .filter((value): value is string | number => typeof value === "string" || typeof value === "number");
   return values.length ? values.join(" · ") : `${item.resource_type.replaceAll("_", " ")} activity`;
 }
@@ -282,7 +282,7 @@ export function ProjectActivityPanel({ projectId, token }: { projectId: string; 
     {error && <div className="collaboration-message error" role="alert">{error}</div>}
     {loading ? <div className="collaboration-empty">Loading project activity…</div> : items.length ? <div className="timeline">{items.map((item) => <div className="timeline-item" key={item.id}>
       <span className="timeline-icon purple-bg"><Activity size={16} /></span>
-      <div><b>{actionLabel(item.action)}</b><small>{activityDetail(item)}{item.actor_name || item.actor_email ? ` · by ${item.actor_name || item.actor_email}` : ""}</small></div>
+      <div><b>{item.action === "artifact.generate" ? `Generated ${String(item.details.artifact_type ?? "artifact").replaceAll("_", " ")}` : actionLabel(item.action)}</b><small>{activityDetail(item)}{item.actor_name || item.actor_email ? ` · by ${item.actor_name || item.actor_email}` : ""}</small></div>
       <time><Clock3 size={12} />{dateLabel(item.created_at)}</time>
     </div>)}</div> : <div className="collaboration-empty">No project activity has been recorded yet.</div>}
   </section>;

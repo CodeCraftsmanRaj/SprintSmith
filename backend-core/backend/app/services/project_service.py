@@ -127,7 +127,7 @@ class ProjectService:
 
         role = role.lower()
         if role not in self.MEMBER_ROLES:
-            raise ValidationError("Role must be admin, editor, or viewer")
+            raise ValidationError("Role must be editor or viewer, or admin (owner only)")
         if role == "admin" and not self._is_platform_admin(user) and project.owner_id != user.id:
             raise AuthorisationError("Only the project owner can assign the Admin role")
 
