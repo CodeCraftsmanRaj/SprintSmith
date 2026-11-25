@@ -59,10 +59,27 @@ class ProjectMember(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey(PROJECTS_ID_FK, ondelete="CASCADE"), index=True)
     user_id: Mapped[str] = mapped_column(ForeignKey(USERS_ID_FK, ondelete="CASCADE"), index=True)
-    role: Mapped[str] = mapped_column(String(20), default="member")
+    role: Mapped[str] = mapped_column(String(20), default="viewer")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
 
     project = relationship("Project", back_populates="members")
     user = relationship("User", back_populates="memberships")
+
+
+class ProjectInvitation(Base):
+    __tablename__ = "project_invitations"
+    __table_args__ = (UniqueConstraint("project_id", "email"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey(PROJECTS_ID_FK, ondelete="CASCADE"), index=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    role: Mapped[str] = mapped_column(String(20))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    invited_by: Mapped[str] = mapped_column(ForeignKey(USERS_ID_FK, ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # ── Requirements ────────────────────────────────────────────────────────────

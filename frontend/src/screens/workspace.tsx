@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Activity, ArrowDownToLine, ArrowRight, Bell, BookOpen, Check, ChevronDown, CircleHelp, Clock3, Command, Copy, Download, ExternalLink, FileText, FolderKanban, Gauge, Layers3, LogOut, Plus, RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
+import { Activity, ArrowDownToLine, ArrowRight, Bell, BookOpen, Check, ChevronDown, CircleHelp, Clock3, Command, Copy, Download, ExternalLink, FileText, FolderKanban, Gauge, Layers3, LogOut, Plus, RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Upload, Users, X } from "lucide-react";
 import { api, apiUrl, type Artifact, type Project, type ProjectMonitoringDashboard, type Requirement, type User } from "@/lib/backend-api";
 import { GenerateArtifactModal, type ArtifactType } from "@/components/generate-artifact-modal";
+import { ProjectActivityPanel, ProjectCollaboration } from "@/components/ProjectCollaboration";
 
 const tokenKey = "sprintsmith_access_token";
 const navItems = [
@@ -9,8 +10,11 @@ const navItems = [
   { id: "requirements", label: "Requirements", icon: FileText },
   { id: "artifacts", label: "Artifacts", icon: Layers3 },
   { id: "activity", label: "Activity", icon: Activity },
+  { id: "team", label: "Team", icon: Users },
 ] as const;
 type Page = (typeof navItems)[number]["id"];
+type ProjectRole = "owner" | "admin" | "editor" | "viewer";
+type TeamAccess = { current_role: ProjectRole };
 
 async function getProjectMonitoringDashboard(projectId: string, authToken: string): Promise<ProjectMonitoringDashboard> {
   try {
@@ -29,7 +33,9 @@ async function getProjectMonitoringDashboard(projectId: string, authToken: strin
 
 export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) => void } = {}) {
   const [token, setToken] = useState(() => typeof window === "undefined" ? "" : localStorage.getItem(tokenKey) || "");
+  const [inviteToken, setInviteToken] = useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("invite") || sessionStorage.getItem("sprintsmith_pending_invitation") || "");
   const [user, setUser] = useState<User | null>(null);
+  const [projectRole, setProjectRole] = useState<ProjectRole>("viewer");
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [monitoringDashboard, setMonitoringDashboard] = useState<ProjectMonitoringDashboard>({
@@ -64,14 +70,16 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
     const selected = projectList.find((item) => item.id === selectedId) ?? projectList[0] ?? null;
     setProject(selected);
     if (selected) {
-      const [reqs, arts, dashboard] = await Promise.all([
+      const [reqs, arts, dashboard, teamAccess] = await Promise.all([
         api<Requirement[]>(`/api/v1/projects/${selected.id}/requirements`, authToken),
         api<Artifact[]>(`/api/v1/projects/${selected.id}/artifacts`, authToken),
         getProjectMonitoringDashboard(selected.id, authToken),
+        api<TeamAccess>(`/api/v1/projects/${selected.id}/members`, authToken),
       ]);
       setRequirements(reqs);
       setArtifacts(arts);
       setMonitoringDashboard(dashboard);
+      setProjectRole(teamAccess.current_role ?? (me.role === "admin" ? "admin" : ["owner", "admin", "editor", "viewer"].includes(me.role) ? me.role as ProjectRole : "editor"));
     } else {
       setRequirements([]);
       setArtifacts([]);
@@ -80,6 +88,7 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
         dashboard_url: null,
         message: "Select a project to view its monitoring dashboard.",
       });
+      setProjectRole("viewer");
     }
   }, []);
 
@@ -94,10 +103,33 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
     return () => { active = false; };
   }, [token, loadWorkspace]);
 
+  useEffect(() => {
+    if (!token || !inviteToken) return;
+    let active = true;
+    api<{ project_id: string; project_name: string; role: string }>(
+      "/api/v1/projects/invitations/accept",
+      token,
+      { method: "POST", body: JSON.stringify({ token: inviteToken }) },
+    ).then(async (accepted) => {
+      await loadWorkspace(token, accepted.project_id);
+      if (!active) return;
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("invite");
+      window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+      sessionStorage.removeItem("sprintsmith_pending_invitation");
+      setInviteToken("");
+      setPage("overview");
+      setNotice(`Invitation accepted. You joined ${accepted.project_name} as ${accepted.role}.`);
+    }).catch((cause: unknown) => {
+      if (active) setError(cause instanceof Error ? cause.message : "Could not accept this project invitation.");
+    });
+    return () => { active = false; };
+  }, [token, inviteToken, loadWorkspace]);
+
   function signOut() {
     localStorage.removeItem(tokenKey);
     onTokenChange?.("");
-    setToken(""); setUser(null); setProjects([]); setProject(null); setRequirements([]); setArtifacts([]);
+    setToken(""); setUser(null); setProjects([]); setProject(null); setRequirements([]); setArtifacts([]); setProjectRole("viewer");
     setMonitoringDashboard({ available: false, dashboard_url: null, message: "Sign in to view project monitoring." });
   }
 
@@ -140,11 +172,12 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
     setProject(next); setBusy(true); setError("");
     setMonitoringDashboard({ available: false, dashboard_url: null, message: "Loading Grafana dashboard…" });
     try {
-      const [reqs, arts, dashboard] = await Promise.all([
+      const [reqs, arts, dashboard, teamAccess] = await Promise.all([
         api<Requirement[]>(`/api/v1/projects/${id}/requirements`, token), api<Artifact[]>(`/api/v1/projects/${id}/artifacts`, token),
         getProjectMonitoringDashboard(id, token),
+        api<TeamAccess>(`/api/v1/projects/${id}/members`, token),
       ]);
-      setRequirements(reqs); setArtifacts(arts); setMonitoringDashboard(dashboard); setPage("overview");
+      setRequirements(reqs); setArtifacts(arts); setMonitoringDashboard(dashboard); setProjectRole(teamAccess.current_role ?? "editor"); setPage("overview");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not open project"); }
     finally { setBusy(false); }
   }
@@ -191,9 +224,10 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
 
   const filteredArtifacts = useMemo(() => artifacts.filter((a) => `${a.title} ${a.artifact_type}`.toLowerCase().includes(search.toLowerCase())), [artifacts, search]);
   const recentArtifacts = artifacts.slice(0, 5);
+  const canEditProject = projectRole !== "viewer";
   const formatDate = (value: string) => new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
-  if (!token) return <AuthScreen mode={authMode} setMode={setAuthMode} onSubmit={handleAuth} busy={busy} error={error} />;
+  if (!token) return <AuthScreen mode={authMode} setMode={setAuthMode} onSubmit={handleAuth} busy={busy} error={error} invited={Boolean(inviteToken)} />;
 
   return <div className="app-shell">
     <aside className="sidebar">
@@ -210,7 +244,7 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
       <div className="content-wrap">
         {(error || notice) && <div className={`toast ${error ? "toast-error" : "toast-success"}`}><span>{error || notice}</span><button onClick={() => { setError(""); setNotice(""); }}><X size={15} /></button></div>}
         {!project ? <EmptyProjects onCreate={() => setShowCreate(true)} /> : <>
-          <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> PROJECT CONSOLE</div><h1>{page === "overview" ? "Project overview" : page === "requirements" ? "Requirements" : page === "artifacts" ? "Generated artifacts" : "Activity"}</h1><p>{page === "overview" ? "A clear view of your SDLC workspace and recent progress." : page === "requirements" ? "Manage source documents and turn them into structured engineering outputs." : page === "artifacts" ? "Review and explore AI generated project deliverables." : "A timeline of work across this project."}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={refresh}><RefreshCw size={15} /> Refresh</button><button className="button button-primary" onClick={() => setPage("requirements")}><Plus size={16} /> Add requirement</button></div></section>
+          <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> PROJECT CONSOLE</div><h1>{page === "overview" ? "Project overview" : page === "requirements" ? "Requirements" : page === "artifacts" ? "Generated artifacts" : page === "team" ? "Project team" : "Activity"}</h1><p>{page === "overview" ? "A clear view of your SDLC workspace and recent progress." : page === "requirements" ? "Manage source documents and turn them into structured engineering outputs." : page === "artifacts" ? "Review and explore AI generated project deliverables." : page === "team" ? "Invite collaborators and manage project access." : "A timeline of work across this project."}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={refresh}><RefreshCw size={15} /> Refresh</button>{canEditProject && <button className="button button-primary" onClick={() => setPage("requirements")}><Plus size={16} /> Add requirement</button>}</div></section>
           {page === "overview" && <>
             <div className="metric-grid"><Metric label="Requirements" value={requirements.length} helper="Source documents" icon={FileText} color="amber" /><Metric label="Artifacts" value={artifacts.length} helper="Generated outputs" icon={Layers3} color="purple" /><Metric label="Project health" value={requirements.length ? "Active" : "Ready"} helper={requirements.length ? "Pipeline operational" : "Awaiting first input"} icon={ShieldCheck} color="green" /><Metric label="Last updated" value={artifacts[0] ? formatDate(artifacts[0].created_at) : "â€”"} helper="Most recent artifact" icon={Clock3} color="blue" /></div>
             <div className="dashboard-grid"><section className="panel pipeline-panel"><div className="panel-heading"><div><span className="section-kicker">WORKFLOW</span><h2>Project pipeline</h2></div><span className="live-label"><i /> LIVE STATUS</span></div><div className="pipeline"><PipelineStep icon={FileText} label="Requirements" count={requirements.length} state={requirements.length ? "complete" : "empty"} /><div className="pipeline-connector" /><PipelineStep icon={Sparkles} label="Generation" count={artifacts.length} state={artifacts.length ? "complete" : "empty"} /><div className="pipeline-connector" /><PipelineStep icon={Layers3} label="Artifacts" count={artifacts.length} state={artifacts.length ? "complete" : "empty"} /></div><div className="pipeline-foot"><span><span className="pulse-dot" />{requirements.length ? "Workspace is processing normally" : "Add a requirement to begin"}</span><button className="text-button" onClick={() => setPage("requirements")}>View requirements <ArrowRight size={14} /></button></div></section>
@@ -239,9 +273,10 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
             </section>
             <section className="panel table-panel"><div className="panel-heading"><div><span className="section-kicker">RECENT OUTPUT</span><h2>Latest artifacts</h2></div><button className="text-button" onClick={() => setPage("artifacts")}>View all <ArrowRight size={14} /></button></div><ArtifactTable items={recentArtifacts} onSelect={setSelectedArtifact} onPage={() => setPage("artifacts")} /></section>
           </>}
-          {page === "requirements" && <><div className="requirements-actions-row"><div className="panel form-panel"><div className="panel-heading"><div><span className="section-kicker">SOURCE INPUT</span><h2>Add a requirement</h2></div><span className="panel-icon amber-bg"><Upload size={17} /></span></div><p className="panel-copy">Upload a document or paste requirement text. The backend will index it for generation.</p><form className="stack-form" onSubmit={ingest}><label className="field-label" htmlFor="requirement-text">Paste requirement text <span>10â€“50,000 characters</span></label><textarea id="requirement-text" className="text-area" value={requirementText} onChange={(e) => { setRequirementText(e.target.value); setRequirementFile(null); }} minLength={10} maxLength={50000} placeholder="Describe the product requirement, feature, or business need..." /><div className="or-divider"><span>OR UPLOAD DOCUMENT</span></div><label className="drop-zone"><input type="file" accept=".txt,.md,.pdf,.docx,.html,.csv" onChange={(e) => { setRequirementFile(e.target.files?.[0] ?? null); setRequirementText(""); }} /><Upload size={20} /><b>{requirementFile ? requirementFile.name : "Choose a file or drag it here"}</b><small>TXT, Markdown, PDF, DOCX up to 10 MB</small></label><button type="submit" className="button button-primary full-button" disabled={busy || (!requirementFile && requirementText.trim().length < 10)}>{busy ? <><span className="button-spinner" /> Submitting...</> : <><Plus size={16} /> Submit requirement</>}</button></form></div><button className="button button-primary generate-launch" onClick={() => setShowGenerate(true)}><Sparkles size={17} /> Generate Artifact <ArrowRight size={15} /></button></div><section className="panel requirements-list"><div className="panel-heading"><div><span className="section-kicker">PROJECT INPUTS</span><h2>Requirements <span className="count-badge">{requirements.length}</span></h2></div><button className="icon-button" onClick={refresh}><RefreshCw size={15} /></button></div><RequirementTable items={requirements} formatDate={formatDate} /></section></>}
-          {page === "artifacts" && <section className="panel table-panel"><div className="panel-heading"><div><span className="section-kicker">GENERATED OUTPUT</span><h2>Artifacts <span className="count-badge">{artifacts.length}</span></h2></div><button className="button button-primary button-small" onClick={() => setPage("requirements")}><Sparkles size={15} /> New generation</button></div><ArtifactTable items={filteredArtifacts} onSelect={setSelectedArtifact} onPage={() => {}} /></section>}
-          {page === "activity" && <section className="panel table-panel"><div className="panel-heading"><div><span className="section-kicker">AUDIT TRAIL</span><h2>Recent activity</h2></div><span className="status-pill"><i /> Live data</span></div><div className="timeline">{[...artifacts.map((a) => ({ label: `Generated ${a.artifact_type.replaceAll("_", " ")}`, detail: a.title, date: a.created_at, icon: Sparkles, tint: "purple-bg" })), ...requirements.map((r) => ({ label: "Requirement ingested", detail: r.filename, date: r.created_at, icon: FileText, tint: "amber-bg" }))].sort((a,b) => +new Date(b.date) - +new Date(a.date)).map((item, index) => <div className="timeline-item" key={`${item.label}-${item.date}-${index}`}><span className={`timeline-icon ${item.tint}`}><item.icon size={16} /></span><div><b>{item.label}</b><small>{item.detail}</small></div><time>{formatDate(item.date)}</time></div>)}{!artifacts.length && !requirements.length && <EmptyState icon={Activity} title="No activity yet" text="Add a requirement or generate an artifact to see project activity here." />}</div></section>}
+          {page === "requirements" && <><div className="requirements-actions-row"><div className="panel form-panel"><div className="panel-heading"><div><span className="section-kicker">SOURCE INPUT</span><h2>Add a requirement</h2></div><span className="panel-icon amber-bg"><Upload size={17} /></span></div><p className="panel-copy">Upload a document or paste requirement text. The backend will index it for generation.</p><form className="stack-form" onSubmit={ingest}><label className="field-label" htmlFor="requirement-text">Paste requirement text <span>10â€“50,000 characters</span></label><textarea id="requirement-text" className="text-area" value={requirementText} onChange={(e) => { setRequirementText(e.target.value); setRequirementFile(null); }} minLength={10} maxLength={50000} placeholder="Describe the product requirement, feature, or business need..." /><div className="or-divider"><span>OR UPLOAD DOCUMENT</span></div><label className="drop-zone"><input type="file" accept=".txt,.md,.pdf,.docx,.html,.csv" onChange={(e) => { setRequirementFile(e.target.files?.[0] ?? null); setRequirementText(""); }} /><Upload size={20} /><b>{requirementFile ? requirementFile.name : "Choose a file or drag it here"}</b><small>TXT, Markdown, PDF, DOCX up to 10 MB</small></label><button type="submit" className="button button-primary full-button" disabled={!canEditProject || busy || (!requirementFile && requirementText.trim().length < 10)}>{busy ? <><span className="button-spinner" /> Submitting...</> : <><Plus size={16} /> Submit requirement</>}</button></form></div><button className="button button-primary generate-launch" onClick={() => setShowGenerate(true)} disabled={!canEditProject}><Sparkles size={17} /> Generate Artifact <ArrowRight size={15} /></button></div><section className="panel requirements-list"><div className="panel-heading"><div><span className="section-kicker">PROJECT INPUTS</span><h2>Requirements <span className="count-badge">{requirements.length}</span></h2></div><button className="icon-button" onClick={refresh}><RefreshCw size={15} /></button></div><RequirementTable items={requirements} formatDate={formatDate} /></section></>}
+          {page === "artifacts" && <section className="panel table-panel"><div className="panel-heading"><div><span className="section-kicker">GENERATED OUTPUT</span><h2>Artifacts <span className="count-badge">{artifacts.length}</span></h2></div>{canEditProject && <button className="button button-primary button-small" onClick={() => setPage("requirements")}><Sparkles size={15} /> New generation</button>}</div><ArtifactTable items={filteredArtifacts} onSelect={setSelectedArtifact} onPage={() => {}} /></section>}
+          {page === "activity" && <ProjectActivityPanel projectId={project.id} token={token} />}
+          {page === "team" && <ProjectCollaboration projectId={project.id} token={token} />}
         </>}
         <footer className="page-footer"><span>SPRINTSMITH <span className="footer-sep">/</span> PROJECT WORKSPACE</span><span>API gateway <a href={apiUrl} target="_blank" rel="noreferrer">{apiUrl}</a></span></footer>
       </div>
@@ -252,8 +287,8 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
   </div>;
 }
 
-function AuthScreen({ mode, setMode, onSubmit, busy, error }: { mode: "login" | "register"; setMode: (value: "login" | "register") => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; busy: boolean; error: string }) {
-  return <div className="auth-screen"><div className="auth-glow" /><div className="auth-card"><a href="/" className="brand auth-brand"><span className="brand-mark"><Command size={18} /></span><span>SprintSmith</span></a><div className="auth-eyebrow"><span className="pulse-dot" /> ENGINEERING WORKSPACE</div><h1>{mode === "login" ? "Welcome back" : "Create your workspace"}</h1><p>{mode === "login" ? "Sign in to continue to your project console." : "Create an account to start organizing your SDLC."}</p>{error && <div className="auth-error">{error}</div>}<form className="stack-form auth-form" onSubmit={onSubmit}>{mode === "register" && <><label className="field-label" htmlFor="full-name">Full name</label><input className="text-input" id="full-name" name="full_name" autoComplete="name" required minLength={1} placeholder="Your name" /></>}<label className="field-label" htmlFor="email">Email address</label><input className="text-input" id="email" type="email" name="email" autoComplete="email" required placeholder="you@company.com" /><label className="field-label" htmlFor="password">Password</label><input className="text-input" id="password" type="password" name="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={8} required placeholder="At least 8 characters" /><button type="submit" className="button button-primary full-button" disabled={busy}>{busy ? "Connecting..." : mode === "login" ? "Sign in" : "Create account"}<ArrowRight size={16} /></button></form><div className="auth-switch">{mode === "login" ? "New to SprintSmith?" : "Already have an account?"}<button onClick={() => setMode(mode === "login" ? "register" : "login")}>{mode === "login" ? "Create account" : "Sign in"}</button></div><div className="auth-api"><span className="pulse-dot" /> Connecting to <code>{apiUrl}</code></div></div><div className="auth-foot">BUILT FOR THE WORK BEHIND GREAT SOFTWARE</div></div>;
+function AuthScreen({ mode, setMode, onSubmit, busy, error, invited }: { mode: "login" | "register"; setMode: (value: "login" | "register") => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; busy: boolean; error: string; invited: boolean }) {
+  return <div className="auth-screen"><div className="auth-glow" /><div className="auth-card"><a href="/" className="brand auth-brand"><span className="brand-mark"><Command size={18} /></span><span>SprintSmith</span></a><div className="auth-eyebrow"><span className="pulse-dot" /> ENGINEERING WORKSPACE</div><h1>{mode === "login" ? "Welcome back" : "Create your workspace"}</h1><p>{mode === "login" ? "Sign in to continue to your project console." : "Create an account to start organizing your SDLC."}</p>{invited && <div className="invitation-auth-note"><Users size={15} /><span>You’ve been invited to collaborate. Sign in or create an account with the invited email to join the project.</span></div>}{error && <div className="auth-error">{error}</div>}<form className="stack-form auth-form" onSubmit={onSubmit}>{mode === "register" && <><label className="field-label" htmlFor="full-name">Full name</label><input className="text-input" id="full-name" name="full_name" autoComplete="name" required minLength={1} placeholder="Your name" /></>}<label className="field-label" htmlFor="email">Email address</label><input className="text-input" id="email" type="email" name="email" autoComplete="email" required placeholder="you@company.com" /><label className="field-label" htmlFor="password">Password</label><input className="text-input" id="password" type="password" name="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={8} required placeholder="At least 8 characters" /><button type="submit" className="button button-primary full-button" disabled={busy}>{busy ? "Connecting..." : mode === "login" ? "Sign in" : "Create account"}<ArrowRight size={16} /></button></form><div className="auth-switch">{mode === "login" ? "New to SprintSmith?" : "Already have an account?"}<button onClick={() => setMode(mode === "login" ? "register" : "login")}>{mode === "login" ? "Create account" : "Sign in"}</button></div><div className="auth-api"><span className="pulse-dot" /> Connecting to <code>{apiUrl}</code></div></div><div className="auth-foot">BUILT FOR THE WORK BEHIND GREAT SOFTWARE</div></div>;
 }
 
 function Metric({ label, value, helper, icon: Icon, color }: { label: string; value: string | number; helper: string; icon: typeof FileText; color: string }) {

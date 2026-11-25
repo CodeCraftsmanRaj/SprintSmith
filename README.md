@@ -148,6 +148,24 @@ curl http://localhost:8002/health
 curl http://localhost:8001/health
 ```
 
+### Project collaboration
+
+The integrated workspace includes a **Team** page for project members, role
+management, and invitations, plus a project-scoped **Activity** timeline. Project
+roles are Owner, Admin, Editor, and Viewer. Owners and project Admins can manage
+members; only Owners can grant the project Admin role. Editors can update project
+work, and Viewers are read-only.
+
+Invitations are created as seven-day links that the inviter copies and sends
+manually. The invitee signs in or registers with the invited email address and
+opens the link to join. No email delivery service is configured. Apply database
+migrations before running the updated backend:
+
+```bash
+cd backend-core
+alembic upgrade head
+```
+
 The core backend uses port `8002` so it does not collide with the SprintSmith
 platform API on `8000`. The AI engine uses `8001`. Both use the Compose
 PostgreSQL service and the shared `core_uploads` volume. The AI image is large

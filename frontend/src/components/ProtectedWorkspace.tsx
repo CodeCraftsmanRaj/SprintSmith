@@ -17,6 +17,8 @@ export function ProtectedWorkspace() {
   useEffect(() => {
     if (token === null) return;
     if (!token && pathname !== "/login") {
+      const pendingInvite = new URLSearchParams(window.location.search).get("invite");
+      if (pendingInvite) sessionStorage.setItem("sprintsmith_pending_invitation", pendingInvite);
       void navigate({ to: "/login", replace: true });
     } else if (token && pathname === "/login") {
       void navigate({ to: "/", replace: true });

@@ -21,11 +21,6 @@ def register(payload: UserCreate, auth_service: AuthService = Depends(get_auth_s
             full_name=payload.full_name,
             password=payload.password,
         )
-        # If a custom role was passed in payload, assign it
-        if hasattr(payload, "role") and payload.role:
-            user.role = payload.role.lower()
-            auth_service.user_repo.commit()
-            auth_service.user_repo.refresh(user)
         return user
     except ConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

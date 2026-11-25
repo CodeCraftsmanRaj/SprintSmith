@@ -5,10 +5,13 @@ Project management API endpoints.
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.api.deps import get_artifact_service, get_current_user, get_project_service
-from app.core.exceptions import AuthorisationError, ResourceNotFoundError, ValidationError
+from app.core.exceptions import AuthorisationError, ConflictError, ResourceNotFoundError, ValidationError
 from app.domain.models import User
 from app.domain.schemas import (
     ProjectCreate,
+    ProjectInvitationAccept,
+    ProjectInvitationCreate,
+    ProjectMemberRoleUpdate,
     ProjectMonitoringDashboard,
     ProjectOut,
     ProjectUpdate,
@@ -32,6 +35,22 @@ def create_project(
         description=payload.description,
         user=user,
     )
+
+
+@router.post("/invitations/accept")
+def accept_project_invitation(
+    payload: ProjectInvitationAccept,
+    project_service: ProjectService = Depends(get_project_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return project_service.accept_invitation(payload.token, user)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except ConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
 
 @router.get("", response_model=list[ProjectOut])
@@ -126,6 +145,110 @@ def add_member(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/{project_id}/members")
+def list_project_members(
+    project_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return project_service.list_members(project_id, user)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+
+
+@router.post("/{project_id}/invitations", status_code=status.HTTP_201_CREATED)
+def invite_project_member(
+    project_id: str,
+    payload: ProjectInvitationCreate,
+    project_service: ProjectService = Depends(get_project_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return project_service.invite_member(project_id, str(payload.email), payload.role, user)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except ConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+
+@router.patch("/{project_id}/members/{member_id}")
+def update_project_member_role(
+    project_id: str,
+    member_id: str,
+    payload: ProjectMemberRoleUpdate,
+    project_service: ProjectService = Depends(get_project_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return project_service.update_member_role(project_id, member_id, payload.role, user)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except ConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+
+@router.delete("/{project_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_project_member(
+    project_id: str,
+    member_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        project_service.remove_member(project_id, member_id, user)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except ConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+
+@router.delete("/{project_id}/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_project_invitation(
+    project_id: str,
+    invitation_id: str,
+    project_service: ProjectService = Depends(get_project_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        project_service.revoke_invitation(project_id, invitation_id, user)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except ConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+
+@router.get("/{project_id}/activity")
+def project_activity(
+    project_id: str,
+    limit: int = Query(100, ge=1, le=500),
+    project_service: ProjectService = Depends(get_project_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return project_service.list_activity(project_id, user, limit)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
 
 
 @router.get("/{project_id}/history")
