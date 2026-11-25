@@ -13,7 +13,11 @@ from app.api.v1.health import router as health_router
 from app.api.v1.ingest import router as ingest_router
 from app.api.v1.prompts import router as prompts_router
 from app.api.v1.runs import router as runs_router
+from app.api.v1.exports import router as exports_router
 from app.config import settings
+from app.pipeline.observability import enforce_production_tracing_guard
+
+enforce_production_tracing_guard()
 
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger("sprintsmith.ai_engine")
@@ -30,3 +34,4 @@ app.include_router(ingest_router)
 app.include_router(generate_router)
 app.include_router(prompts_router)
 app.include_router(runs_router)
+app.include_router(exports_router)

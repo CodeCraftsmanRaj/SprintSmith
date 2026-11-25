@@ -6,6 +6,7 @@ import io
 import json
 import zipfile
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_artifact_service, get_current_user, get_db
@@ -17,6 +18,12 @@ from app.services.artifact_export import render_artifact_export
 from app.services.artifact_service import ArtifactService
 
 router = APIRouter(tags=["Artifacts"])
+
+
+class BacklogExportRequest(BaseModel):
+    target: dict
+    dry_run: bool = False
+    update_issue_id: str | None = None
 
 
 @router.get("/artifact-types")
@@ -152,6 +159,32 @@ def export_artifact(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthorisationError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.post("/artifacts/{artifact_id}/export/backlog")
+async def export_backlog_artifact(
+    artifact_id: str,
+    payload: BacklogExportRequest,
+    artifact_service: ArtifactService = Depends(get_artifact_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        artifact = artifact_service.get(artifact_id, user)
+    except ResourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AuthorisationError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    content = artifact.content or {}
+    markdown = content.get("rendered_markdown") or content.get("markdown")
+    if not markdown:
+        markdown = json.dumps(content, ensure_ascii=False, indent=2)
+    try:
+        return await AIEngineClient().export_backlog_artifact(
+            target=payload.target, title=artifact.title, markdown=markdown,
+            dry_run=payload.dry_run, update_issue_id=payload.update_issue_id,
+        )
+    except HTTPException:
+        raise
 
     response = render_artifact_export(artifact, format)
     if response is None:

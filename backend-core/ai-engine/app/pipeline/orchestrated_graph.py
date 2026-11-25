@@ -24,6 +24,9 @@ from app.config import settings
 from app.llm.provider import get_llm
 from app.pipeline.quality_check import _strip_code_fences
 from app.pipeline.sanitize import sanitize_artifact
+from app.pipeline import llm_cache
+from app.pipeline.secret_scan import raise_if_secrets_found
+from app.pipeline.llm_errors import LLMNodeFailure
 from app.schemas.acceptance_criteria import AcceptanceCriteriaList, AcceptanceCriterion
 from app.schemas.test_case import TestCase, TestCaseList
 
@@ -217,7 +220,7 @@ def _with_node_policy(node_id: str, node_fn):
                 detail = {"node_id": node_id, "attempts": attempt + 1,
                           "error": str(exc), "fail_strategy": policy.get("fail_strategy", "halt")}
                 if detail["fail_strategy"] != "continue":
-                    raise
+                    raise LLMNodeFailure(node_id, exc, attempt + 1) from exc
                 return {
                     "node_failures": {node_id: detail},
                     "outputs": {node_id: {"status": "failed", **detail}},
@@ -251,19 +254,35 @@ def _invoke_json_agent(
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_prompt),
     ]
+    prompt_hash = __import__("hashlib").sha256(system_prompt.encode()).hexdigest()
+    key = llm_cache.cache_key(alias, prompt_hash, messages)
+    cached_text = llm_cache.get(key)
     try:
-        raw = llm.invoke(messages)
+        raw = type("CachedLLMResponse", (), {"content": cached_text, "usage_metadata": None})() if cached_text is not None else llm.invoke(messages)
     except Exception:
         fallback = settings.FALLBACK_LLM
         if not (fallback and fallback != alias):
             raise
         alias = fallback
-        raw = get_llm(fallback, temperature=0.1).invoke(messages)
+        key = llm_cache.cache_key(alias, prompt_hash, messages)
+        cached_text = llm_cache.get(key)
+        if cached_text is not None:
+            raw = type("CachedLLMResponse", (), {"content": cached_text, "usage_metadata": None})()
+        else:
+            raw = get_llm(fallback, temperature=0.1).invoke(messages)
 
     text = raw.content if hasattr(raw, "content") else str(raw)
     cleaned = _strip_code_fences(text)
     match = _JSON_RE.search(cleaned)
-    parsed = schema_cls.model_validate(json.loads(match.group(0) if match else cleaned))
+    try:
+        parsed = schema_cls.model_validate(json.loads(match.group(0) if match else cleaned))
+    except Exception:
+        if cached_text is not None:
+            llm_cache.delete(key)
+            return _invoke_json_agent(system_prompt, user_prompt, schema_cls, model_alias)
+        raise
+    if cached_text is None:
+        llm_cache.put(key, text)
     return parsed, raw, alias
 
 
@@ -640,6 +659,7 @@ def run_orchestrated_pipeline(
     model_alias: str | None = None,
     retrieval_mode: str | None = None,
 ) -> dict[str, Any]:
+    raise_if_secrets_found(requirement_text)
     graph = build_orchestrated_graph(entry_point="retrieve")
     initial_state: OrchestratedState = {
         "run_id": run_id,

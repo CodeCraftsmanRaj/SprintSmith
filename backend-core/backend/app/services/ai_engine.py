@@ -176,3 +176,10 @@ class AIEngineClient(AIEnginePort):
                 "resume_payload": resume_payload,
             },
         )
+
+    async def export_backlog_artifact(self, *, target: dict, title: str, markdown: str,
+                                     dry_run: bool = False, update_issue_id: str | None = None) -> dict:
+        return await self._request("POST", "/export", json={
+            "target": target, "title": title, "markdown": markdown,
+            "dry_run": dry_run, "update_issue_id": update_issue_id,
+        })
