@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TaskBoard } from "@/components/TaskBoard";
 import * as backendApi from "@/lib/backend-api";
@@ -277,5 +277,99 @@ describe("TaskBoard", () => {
     expect(screen.queryByRole("button", { name: /add task/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: `Edit ${task.title}` })).not.toBeInTheDocument();
     expect(screen.getByRole("article")).not.toHaveAttribute("draggable", "true");
+  });
+
+  it("uses a friendly message when loading tasks rejects a non-Error value", async () => {
+    vi.spyOn(backendApi, "api").mockImplementation(((path: string) =>
+      path.endsWith("/tasks") ? Promise.reject("offline") : Promise.resolve({ members: [] })) as typeof backendApi.api);
+    render(<TaskBoard projectId="p1" token="token" canEdit />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load project tasks.");
+  });
+
+  it("ignores blank title submissions and update responses for other tasks", async () => {
+    const api = vi.spyOn(backendApi, "api").mockImplementation(((path: string, _token: string, init?: RequestInit) => {
+      if (path.endsWith("/members")) return Promise.resolve({ members: [member] });
+      if (init?.method === "PATCH") return Promise.resolve({ ...task, id: "another-task", title: "Unexpected" });
+      return Promise.resolve([task]);
+    }) as typeof backendApi.api);
+    render(<TaskBoard projectId="p1" token="token" canEdit />);
+    await screen.findByText(task.title);
+
+    fireEvent.click(screen.getByRole("button", { name: /^add task$/i }));
+    fireEvent.submit(screen.getByRole("dialog").querySelector("form")!);
+    expect(api.mock.calls.filter(([, , init]) => init?.method === "POST")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    fireEvent.click(screen.getByRole("button", { name: `Edit ${task.title}` }));
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() =>
+      expect(api.mock.calls.filter(([, , init]) => init?.method === "PATCH")).toHaveLength(1),
+    );
+    expect(screen.queryByText("Unexpected")).not.toBeInTheDocument();
+    expect(await screen.findByText(task.title)).toBeInTheDocument();
+  });
+
+  it("ignores redundant, unknown, and read-only drag and drop actions", async () => {
+    const api = mockApi([task]);
+    const { rerender } = render(<TaskBoard projectId="p1" token="token" canEdit />);
+    await screen.findByText(task.title);
+
+    const sameStatus = { setData: vi.fn(), getData: vi.fn(() => task.id), effectAllowed: "" };
+    fireEvent.drop(screen.getByRole("region", { name: "To Do tasks" }), { dataTransfer: sameStatus });
+    const emptyDrop = { setData: vi.fn(), getData: vi.fn(() => ""), effectAllowed: "" };
+    fireEvent.drop(screen.getByRole("region", { name: "In Progress tasks" }), { dataTransfer: emptyDrop });
+    expect(api.mock.calls.filter(([, , init]) => init?.method === "PATCH")).toHaveLength(0);
+
+    rerender(<TaskBoard projectId="p1" token="token" canEdit={false} />);
+    const inProgress = screen.getByRole("region", { name: "In Progress tasks" });
+    const dragOver = createEvent.dragOver(inProgress);
+    fireEvent(inProgress, dragOver);
+    expect(dragOver.defaultPrevented).toBe(false);
+
+    const readOnlyDrop = { setData: vi.fn(), getData: vi.fn(() => task.id), effectAllowed: "" };
+    fireEvent.drop(inProgress, { dataTransfer: readOnlyDrop });
+    expect(api.mock.calls.filter(([, , init]) => init?.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("ignores move responses that do not match a board task", async () => {
+    const api = vi.spyOn(backendApi, "api").mockImplementation(((path: string, _token: string, init?: RequestInit) => {
+      if (path.endsWith("/members")) return Promise.resolve({ members: [member] });
+      if (init?.method === "PATCH") return Promise.resolve({ ...task, id: "another-task", status: "in_progress" });
+      return Promise.resolve([task]);
+    }) as typeof backendApi.api);
+    render(<TaskBoard projectId="p1" token="token" canEdit />);
+    await screen.findByText(task.title);
+
+    const dataTransfer = { setData: vi.fn(), getData: vi.fn(() => task.id), effectAllowed: "" };
+    fireEvent.drop(screen.getByRole("region", { name: "In Progress tasks" }), { dataTransfer });
+    await waitFor(() =>
+      expect(api.mock.calls.filter(([, , init]) => init?.method === "PATCH")).toHaveLength(1),
+    );
+    expect(
+      within(screen.getByRole("region", { name: "To Do tasks" })).getByText("1"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders unassigned tasks and clears optional editor fields", async () => {
+    const unassigned = { ...task, assignee_id: null };
+    const api = vi.spyOn(backendApi, "api").mockImplementation(((path: string, _token: string, init?: RequestInit) => {
+      if (path.endsWith("/members")) return Promise.resolve({ members: [member] });
+      if (init?.method === "PATCH") return Promise.resolve({ ...unassigned, due_date: null });
+      return Promise.resolve([unassigned]);
+    }) as typeof backendApi.api);
+    render(<TaskBoard projectId="p1" token="token" canEdit />);
+    await screen.findByText(task.title);
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: `Edit ${task.title}` }));
+    fireEvent.change(screen.getByLabelText("Assignee"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Due date"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => {
+      const patch = api.mock.calls.find(([, , init]) => init?.method === "PATCH");
+      expect(patch?.[2]?.body).toContain('"assignee_id":null');
+      expect(patch?.[2]?.body).toContain('"due_date":null');
+    });
   });
 });

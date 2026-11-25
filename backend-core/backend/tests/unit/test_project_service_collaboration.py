@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -359,3 +360,52 @@ def test_list_activity_is_scoped_to_project_access(project_service, pm_user, dev
     assert any(event["action"] == "project.create" for event in events)
     with pytest.raises(AuthorisationError):
         project_service.list_activity(project.id, dev_user)
+
+
+def test_list_members_omits_owner_when_user_record_is_missing(
+    project_service, project_repo, pm_user, monkeypatch
+):
+    """An orphaned owner membership must not break the member listing."""
+    project = project_service.create("Team", "", pm_user)
+    owner_membership = project_repo.get_membership(project.id, pm_user.id)
+    project_repo.delete(owner_membership)
+    project_repo.commit()
+    monkeypatch.setattr(project_service.user_repo, "get", lambda user_id: None)
+
+    members = project_service.list_members(project.id, pm_user)
+
+    assert members["current_role"] == "owner"
+    assert members["can_manage_members"] is True
+    assert members["members"] == []
+
+
+def test_list_members_handles_timezone_aware_invitation_expiry(
+    project_service, pm_user, monkeypatch
+):
+    """Invitations may already carry a timezone, so no conversion is needed."""
+    project = project_service.create("Team", "", pm_user)
+    now = datetime.now(timezone.utc)
+    invitation = SimpleNamespace(
+        id="inv-aware",
+        email="aware@example.test",
+        role="viewer",
+        status="pending",
+        created_at=now,
+        expires_at=now + timedelta(days=1),
+    )
+    monkeypatch.setattr(
+        project_service.project_repo, "list_invitations", lambda project_id: [invitation]
+    )
+
+    members = project_service.list_members(project.id, pm_user)
+
+    assert members["invitations"] == [
+        {
+            "id": "inv-aware",
+            "email": "aware@example.test",
+            "role": "viewer",
+            "status": "pending",
+            "created_at": now,
+            "expires_at": now + timedelta(days=1),
+        }
+    ]

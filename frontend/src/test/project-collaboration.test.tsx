@@ -129,6 +129,88 @@ describe("ProjectCollaboration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove edit@test.dev" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not remove this member.");
   });
+
+  it("uses a friendly message when loading the team rejects a non-Error value", async () => {
+    vi.spyOn(backendApi, "api").mockRejectedValue("offline");
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the project team.");
+  });
+
+  it("surfaces server error messages for member and invitation actions", async () => {
+    const api = vi.spyOn(backendApi, "api").mockImplementation(async (path, _token, init) => {
+      const target = String(path);
+      if (target.endsWith("/members") && !init) return team() as never;
+      if (target.includes("/members/editor") && init?.method === "PATCH") throw new Error("Role update failed");
+      if (target.includes("/members/") && init?.method === "DELETE") throw new Error("Remove failed");
+      if (target.includes("/invitations/") && init?.method === "DELETE") throw new Error("Revoke failed");
+      throw new Error("Invite failed");
+    });
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    await screen.findByText("Project team");
+
+    fireEvent.change(screen.getByLabelText("Role for edit@test.dev"), { target: { value: "viewer" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Role update failed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove edit@test.dev" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Remove failed"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Revoke invite for pending@test.dev" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Revoke failed"));
+
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "new@test.dev" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create invitation link" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Invite failed"));
+    expect(api).toHaveBeenCalled();
+  });
+
+  it("handles role selection, invite-link focus, and clipboard failure", async () => {
+    const api = vi.spyOn(backendApi, "api").mockImplementation(async (path) => {
+      if (String(path).endsWith("/members")) return team() as never;
+      return { token: "invite-token", email: "new@test.dev", role: "viewer", expires_at: "2026-02-01" } as never;
+    });
+    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("blocked"));
+    const select = vi.spyOn(HTMLInputElement.prototype, "select").mockImplementation(() => {});
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    await screen.findByText("Project team");
+
+    fireEvent.change(screen.getByLabelText("Project role"), { target: { value: "viewer" } });
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "new@test.dev" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create invitation link" }));
+
+    const link = await screen.findByLabelText("Share this link (expires in 7 days)");
+    expect(api).toHaveBeenCalledWith(
+      "/api/v1/projects/project-1/invitations",
+      "token",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ email: "new@test.dev", role: "viewer" }) }),
+    );
+    fireEvent.focus(link);
+    expect(select).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Select and copy the invitation link below.");
+  });
+
+  it("uses email fallbacks and confirms successful member and invitation actions", async () => {
+    const nameless = { user_id: "nameless", email: "nameless@test.dev", full_name: "", role: "editor", joined_at: "2026-01-02", is_current_user: false };
+    vi.spyOn(backendApi, "api").mockImplementation(async (path, _token, init) => {
+      if (String(path).endsWith("/members") && !init) return team({ members: [owner, nameless] }) as never;
+      return {} as never;
+    });
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    await screen.findByText("Project team");
+
+    expect(screen.getByText("N")).toBeInTheDocument();
+    expect(screen.getAllByText("nameless@test.dev").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText("Role for nameless@test.dev"), { target: { value: "viewer" } });
+    expect(await screen.findByRole("status")).toHaveTextContent("nameless@test.dev is now Viewer.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove nameless@test.dev" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("nameless@test.dev was removed from the project.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Revoke invite for pending@test.dev" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Invitation for pending@test.dev was revoked.");
+  });
 });
 
 describe("ProjectActivityPanel", () => {
@@ -166,6 +248,20 @@ describe("ProjectActivityPanel", () => {
     render(<ProjectActivityPanel projectId="project-1" token="token" />);
     expect(await screen.findByText("unknown action")).toBeInTheDocument();
     expect(screen.getByText("project change activity")).toBeInTheDocument();
+    expect(screen.queryByText(/by /)).not.toBeInTheDocument();
+  });
+
+  it("uses a friendly message for non-Error failures and defaults missing artifact types", async () => {
+    vi.spyOn(backendApi, "api")
+      .mockRejectedValueOnce("offline")
+      .mockResolvedValueOnce([
+        { id: "generated", action: "artifact.generate", resource_type: "artifact", details: {}, actor_name: null, actor_email: null, created_at: "2026-01-01T00:00:00Z" },
+      ] as never);
+    render(<ProjectActivityPanel projectId="project-1" token="token" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load project activity.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh project activity" }));
+    expect(await screen.findByText("Generated artifact")).toBeInTheDocument();
     expect(screen.queryByText(/by /)).not.toBeInTheDocument();
   });
 });
