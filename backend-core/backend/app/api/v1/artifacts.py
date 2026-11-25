@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_artifact_service, get_current_user, get_db
 from app.core.exceptions import AuthorisationError, ResourceNotFoundError, ValidationError
 from app.domain.models import Requirement, User
-from app.domain.schemas import ArtifactOut, ArtifactUpdate, EvaluationCreate, GenerateRequest
+from app.domain.schemas import (ArtifactOut, ArtifactUpdate, EvaluationBaselineCreate,
+                                EvaluationCreate, GenerateRequest)
 from app.services.ai_engine import AIEngineClient
 from app.services.artifact_export import render_artifact_export
 from app.services.artifact_service import ArtifactService
@@ -24,6 +25,69 @@ class BacklogExportRequest(BaseModel):
     target: dict
     dry_run: bool = False
     update_issue_id: str | None = None
+
+
+@router.post("/projects/{project_id}/evaluation-baselines", status_code=status.HTTP_201_CREATED)
+def create_evaluation_baseline(
+    project_id: str,
+    payload: EvaluationBaselineCreate,
+    artifact_service: ArtifactService = Depends(get_artifact_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return artifact_service.create_baseline(project_id, payload.model_dump(), user)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+
+@router.get("/projects/{project_id}/evaluation-baselines")
+def list_evaluation_baselines(
+    project_id: str,
+    artifact_service: ArtifactService = Depends(get_artifact_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return {"baselines": artifact_service.list_baselines(project_id, user)}
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+
+
+@router.post("/evaluation-baselines/{baseline_id}/compare/{artifact_id}",
+             status_code=status.HTTP_201_CREATED)
+def compare_artifact_to_baseline(
+    baseline_id: str,
+    artifact_id: str,
+    artifact_service: ArtifactService = Depends(get_artifact_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return artifact_service.compare_to_baseline(baseline_id, artifact_id, user)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+
+@router.get("/evaluation-baselines/{baseline_id}/comparisons")
+def list_baseline_comparisons(
+    baseline_id: str,
+    artifact_service: ArtifactService = Depends(get_artifact_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return {"comparisons": artifact_service.list_baseline_comparisons(baseline_id, user)}
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
 
 
 @router.get("/artifact-types")

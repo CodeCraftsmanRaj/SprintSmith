@@ -4,11 +4,14 @@ Artifact generation, update, export, and evaluation business logic.
 
 import json
 import uuid
+import re
+from difflib import SequenceMatcher
 
 from sqlalchemy import select
 
 from app.core.exceptions import ResourceNotFoundError, ValidationError
-from app.domain.models import Artifact, ArtifactStatusHistory, Evaluation, GenerationHistory, User
+from app.domain.models import (Artifact, ArtifactStatusHistory, BaselineComparison, Evaluation,
+                               EvaluationBaseline, GenerationHistory, User)
 from app.repositories.artifact_repo import ArtifactRepository
 from app.repositories.audit_repo import AuditRepository
 from app.services.ai_engine import AIEngineClient
@@ -257,3 +260,80 @@ class ArtifactService:
             }
             for x in items
         ]
+
+    # ── Human baseline comparisons ──────────────────────────────────────
+
+    def create_baseline(self, project_id: str, payload: dict, user: User) -> dict:
+        self.project_service.get_project_or_fail(project_id, user, write=True)
+        if not payload.get("content"):
+            raise ValidationError("Baseline content must not be empty")
+        baseline = EvaluationBaseline(
+            id=self.artifact_repo.new_id(), project_id=project_id, uploaded_by=user.id,
+            artifact_type=payload["artifact_type"], title=payload["title"].strip(),
+            source_name=payload.get("source_name", ""), content=payload["content"],
+        )
+        self.artifact_repo.db.add(baseline)
+        self.audit_repo.record(user.id, "evaluation.baseline.create", "evaluation_baseline",
+                               baseline.id, {"artifact_type": baseline.artifact_type})
+        self.artifact_repo.commit()
+        return self._serialize_baseline(baseline)
+
+    @staticmethod
+    def _serialize_baseline(baseline: EvaluationBaseline) -> dict:
+        return {"id": baseline.id, "project_id": baseline.project_id,
+                "artifact_type": baseline.artifact_type, "title": baseline.title,
+                "source_name": baseline.source_name, "content": baseline.content,
+                "created_at": baseline.created_at}
+
+    def list_baselines(self, project_id: str, user: User) -> list[dict]:
+        self.project_service.get_project_or_fail(project_id, user)
+        rows = self.artifact_repo.db.scalars(select(EvaluationBaseline).where(
+            EvaluationBaseline.project_id == project_id
+        ).order_by(EvaluationBaseline.created_at.desc())).all()
+        return [self._serialize_baseline(row) for row in rows]
+
+    @staticmethod
+    def _comparison_metrics(generated: dict, baseline: dict) -> dict:
+        generated_json = json.dumps(generated, sort_keys=True, ensure_ascii=False)
+        baseline_json = json.dumps(baseline, sort_keys=True, ensure_ascii=False)
+        tokenize = lambda text: set(re.findall(r"[\w]+", text.casefold()))
+        generated_tokens = tokenize(generated_json)
+        baseline_tokens = tokenize(baseline_json)
+        overlap = len(generated_tokens & baseline_tokens)
+        return {
+            "accuracy": round(SequenceMatcher(None, generated_json, baseline_json).ratio(), 4),
+            "completeness": round(overlap / len(baseline_tokens), 4) if baseline_tokens else 1.0,
+            "relevance": round(overlap / len(generated_tokens), 4) if generated_tokens else 1.0,
+            "method": "normalized_json_similarity_and_token_coverage",
+        }
+
+    def compare_to_baseline(self, baseline_id: str, artifact_id: str, user: User) -> dict:
+        baseline = self.artifact_repo.db.get(EvaluationBaseline, baseline_id)
+        if not baseline:
+            raise ResourceNotFoundError("Evaluation baseline", baseline_id)
+        artifact = self._get_artifact_or_fail(artifact_id)
+        self.project_service.get_project_or_fail(artifact.project_id, user)
+        if baseline.project_id != artifact.project_id or baseline.artifact_type != artifact.artifact_type:
+            raise ValidationError("Baseline and generated artifact must share a project and artifact type")
+        self.project_service.get_project_or_fail(baseline.project_id, user, write=True)
+        metrics = self._comparison_metrics(artifact.content or {}, baseline.content or {})
+        row = BaselineComparison(id=self.artifact_repo.new_id(), baseline_id=baseline.id,
+                                 artifact_id=artifact.id, compared_by=user.id, metrics=metrics)
+        self.artifact_repo.db.add(row)
+        self.audit_repo.record(user.id, "evaluation.baseline.compare", "artifact", artifact.id,
+                               {"baseline_id": baseline.id, "metrics": metrics})
+        self.artifact_repo.commit()
+        return {"id": row.id, "baseline_id": row.baseline_id, "artifact_id": row.artifact_id,
+                "metrics": row.metrics, "created_at": row.created_at}
+
+    def list_baseline_comparisons(self, baseline_id: str, user: User) -> list[dict]:
+        baseline = self.artifact_repo.db.get(EvaluationBaseline, baseline_id)
+        if not baseline:
+            raise ResourceNotFoundError("Evaluation baseline", baseline_id)
+        self.project_service.get_project_or_fail(baseline.project_id, user)
+        rows = self.artifact_repo.db.scalars(select(BaselineComparison).where(
+            BaselineComparison.baseline_id == baseline.id
+        ).order_by(BaselineComparison.created_at.desc())).all()
+        return [{"id": row.id, "artifact_id": row.artifact_id,
+                 "compared_by": row.compared_by, "metrics": row.metrics,
+                 "created_at": row.created_at} for row in rows]

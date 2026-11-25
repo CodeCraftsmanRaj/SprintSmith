@@ -249,6 +249,30 @@ class Evaluation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
 
 
+class EvaluationBaseline(Base):
+    __tablename__ = "evaluation_baselines"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey(PROJECTS_ID_FK, ondelete="CASCADE"), index=True)
+    uploaded_by: Mapped[str] = mapped_column(ForeignKey(USERS_ID_FK))
+    artifact_type: Mapped[str] = mapped_column(String(80), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    source_name: Mapped[str] = mapped_column(String(255), default="")
+    content: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, index=True)
+
+
+class BaselineComparison(Base):
+    __tablename__ = "baseline_comparisons"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    baseline_id: Mapped[str] = mapped_column(ForeignKey("evaluation_baselines.id", ondelete="CASCADE"), index=True)
+    artifact_id: Mapped[str] = mapped_column(ForeignKey(ARTIFACTS_ID_FK, ondelete="CASCADE"), index=True)
+    compared_by: Mapped[str] = mapped_column(ForeignKey(USERS_ID_FK))
+    metrics: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, index=True)
+
+
 # ── Audit ───────────────────────────────────────────────────────────────────
 
 
