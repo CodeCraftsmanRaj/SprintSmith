@@ -43,6 +43,7 @@ async def langfuse_observations(
     }
     observations: list[dict] = []
     cursor: str | None = None
+    truncated = False
 
     try:
         async with httpx.AsyncClient(
@@ -50,7 +51,7 @@ async def langfuse_observations(
             auth=(settings.langfuse_public_key, settings.langfuse_secret_key),
             timeout=httpx.Timeout(20.0, connect=5.0),
         ) as client:
-            for _ in range(_MAX_PAGES):
+            for page in range(_MAX_PAGES):
                 page_params = dict(params)
                 if cursor:
                     page_params["cursor"] = cursor
@@ -64,6 +65,7 @@ async def langfuse_observations(
                         status_code=502,
                         detail=f"Langfuse API returned HTTP {response.status_code}",
                     )
+
                 try:
                     payload = response.json()
                 except ValueError as exc:
@@ -76,15 +78,18 @@ async def langfuse_observations(
                         status_code=502,
                         detail="Langfuse returned an invalid observations response",
                     )
+
                 observations.extend(row for row in payload.get("data", []) if isinstance(row, dict))
                 meta = payload.get("meta") or {}
-                cursor = meta.get("cursor") if isinstance(meta, dict) else None
-                if not cursor:
+                next_cursor = meta.get("cursor") if isinstance(meta, dict) else None
+                if not next_cursor:
+                    cursor = None
                     break
+                cursor = str(next_cursor)
+                if page == _MAX_PAGES - 1:
+                    truncated = True
     except HTTPException:
         raise
-    except (httpx.TimeoutException, httpx.ConnectError) as exc:
-        raise HTTPException(status_code=502, detail="Could not reach the Langfuse API") from exc
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="Could not reach the Langfuse API") from exc
 
@@ -93,5 +98,5 @@ async def langfuse_observations(
         "langfuse_url": settings.langfuse_base_url,
         "days": days,
         "observations": observations,
-        "truncated": bool(cursor),
+        "truncated": truncated,
     }
