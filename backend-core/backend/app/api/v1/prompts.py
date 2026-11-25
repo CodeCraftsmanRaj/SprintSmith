@@ -5,7 +5,6 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_role
 from app.domain.models import PromptVersion, User
@@ -130,6 +129,17 @@ def list_orchestration_prompts(node_id: str, db: Session = Depends(get_db),
 @router.get("")
 async def list_prompts(user: User = Depends(get_current_user)):
     return await AIEngineClient()._request("GET", "/prompts")
+
+
+@router.get("/export")
+async def export_artifact_prompt_bundle(user: User = Depends(require_role("admin"))):
+    return await AIEngineClient()._request("GET", "/prompts/export")
+
+
+@router.post("/import", status_code=201)
+async def import_artifact_prompt_bundle(payload: dict,
+                                        user: User = Depends(require_role("admin"))):
+    return await AIEngineClient()._request("POST", "/prompts/import", json=payload)
 
 
 @router.get("/{artifact_type}")

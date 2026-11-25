@@ -2,8 +2,11 @@
 Prompt template management endpoints.
 """
 
+import uuid
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+import yaml
 
 from app.pipeline.chain import build_generation_chain, retrieve_context
 from app.pipeline.sop_graph import _extract_text
@@ -25,9 +28,90 @@ class PromptTestRequest(BaseModel):
     requirement_text: str = Field(min_length=1, max_length=20000)
 
 
+class PromptBundleItem(BaseModel):
+    artifact_type: str = Field(min_length=1, max_length=80)
+    version_id: str = Field(min_length=1, max_length=100)
+    system: str = Field(min_length=1, max_length=20000)
+    human: str = Field(min_length=1, max_length=20000)
+
+
+class PromptImportBundle(BaseModel):
+    schema_version: int = Field(ge=1, le=1)
+    prompts: list[PromptBundleItem] = Field(min_length=1, max_length=500)
+
+
 @router.get("/prompts")
 def list_prompts():
     return {"artifact_types": {name: list_versions(name) for name in list_artifact_types()}}
+
+
+@router.get("/prompts/export")
+def export_prompt_bundle():
+    """Export all file-backed artifact prompt versions as a portable JSON bundle."""
+    prompts = []
+    for artifact_type in list_artifact_types():
+        for version_file in list_versions(artifact_type):
+            path = PROMPT_DIR / artifact_type / f"{version_file}.yaml"
+            spec = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            prompts.append({"artifact_type": artifact_type,
+                            "version_file": version_file,
+                            "version_id": spec.get("version_id", f"{artifact_type}_{version_file}"),
+                            "system": spec.get("system", ""), "human": spec.get("human", "")})
+    return {"schema_version": 1, "prompts": prompts}
+
+
+@router.post("/prompts/import", status_code=201)
+def import_prompt_bundle(payload: PromptImportBundle):
+    """Import prompts as new versions; never overwrite an existing prompt file."""
+    invalid_types = sorted({item.artifact_type for item in payload.prompts
+                            if item.artifact_type not in SCHEMA_REGISTRY})
+    if invalid_types:
+        raise HTTPException(status_code=422,
+                            detail=f"Unknown artifact type(s): {', '.join(invalid_types)}")
+    next_versions: dict[str, int] = {}
+    planned = []
+    for item in payload.prompts:
+        if item.artifact_type not in next_versions:
+            next_versions[item.artifact_type] = max(
+                (int(value[1:]) for value in list_versions(item.artifact_type)), default=0
+            ) + 1
+        version_number = next_versions[item.artifact_type]
+        next_versions[item.artifact_type] += 1
+        version_file = f"v{version_number}"
+        directory = PROMPT_DIR / item.artifact_type
+        directory.mkdir(parents=True, exist_ok=True)
+        destination = directory / f"{version_file}.yaml"
+        temporary = directory / f".{version_file}.{uuid.uuid4().hex}.tmp"
+        content = yaml.safe_dump({"version_id": item.version_id, "system": item.system,
+                                  "human": item.human}, sort_keys=False, allow_unicode=True)
+        temporary.write_text(content, encoding="utf-8")
+        planned.append((item, version_file, temporary, destination))
+
+    published = []
+    try:
+        for item, version_file, temporary, destination in planned:
+            # Hard-link publication is atomic and fails if a concurrent import
+            # has already created the chosen version instead of overwriting it.
+            destination.hardlink_to(temporary)
+            published.append(destination)
+            temporary.unlink(missing_ok=True)
+    except FileExistsError as exc:
+        for path in published:
+            path.unlink(missing_ok=True)
+        for _, _, temporary, _ in planned:
+            temporary.unlink(missing_ok=True)
+        raise HTTPException(status_code=409,
+                            detail="Prompt versions changed during import; retry the bundle") from exc
+    except Exception:
+        for path in published:
+            path.unlink(missing_ok=True)
+        for _, _, temporary, _ in planned:
+            temporary.unlink(missing_ok=True)
+        raise
+    return {"imported": len(planned),
+            "versions": [{"artifact_type": item.artifact_type, "version_id": item.version_id,
+                          "version_file": version_file}
+                         for item, version_file, _, _ in planned]}
 
 
 @router.get("/prompts/{artifact_type}")
