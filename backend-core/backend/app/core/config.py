@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     ai_engine_url: str = "http://localhost:8001"
     grafana_root_url: str | None = None
     grafana_dashboard_uid: str = "sprintsmith-api"
+    langfuse_enabled: bool = False
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = "https://cloud.langfuse.com"
 
     # ── File Storage ────────────────────────────────────────────────────────
     upload_dir: str = "./var/uploads"

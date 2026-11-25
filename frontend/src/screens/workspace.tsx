@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { Activity, ArrowDownToLine, ArrowRight, Bell, BookOpen, Check, ChevronDown, CircleHelp, Clock3, Command, Copy, Download, ExternalLink, FileText, FolderKanban, Gauge, Layers3, LogOut, Plus, RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Upload, X, Coins } from "lucide-react";
 import { api, apiUrl, type Artifact, type Project, type ProjectMonitoringDashboard, type Requirement, type User, type WorkflowRunMetrics } from "@/lib/backend-api";
 import { GenerateArtifactModal, type ArtifactType } from "@/components/generate-artifact-modal";
+import { LangfuseMonitoring } from "@/components/LangfuseMonitoring";
 
 const tokenKey = "sprintsmith_access_token";
 const navItems = [
@@ -9,6 +10,7 @@ const navItems = [
   { id: "requirements", label: "Requirements", icon: FileText },
   { id: "artifacts", label: "Artifacts", icon: Layers3 },
   { id: "activity", label: "Activity", icon: Activity },
+  { id: "monitoring", label: "AI Monitoring", icon: Activity },
 ] as const;
 type Page = (typeof navItems)[number]["id"];
 
@@ -119,6 +121,10 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
     return () => { active = false; };
   }, [token, loadWorkspace]);
 
+  useEffect(() => {
+    if (user && user.role.toLowerCase() !== "admin" && page === "monitoring") setPage("overview");
+  }, [page, user]);
+
   function signOut() {
     localStorage.removeItem(tokenKey);
     onTokenChange?.("");
@@ -228,7 +234,7 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
       <button className="project-switcher" onClick={() => setShowCreate(true)}><span className="project-icon"><FolderKanban size={16} /></span><span className="project-current">{project?.name ?? "Select a project"}<small>{project ? "Project workspace" : "Get started"}</small></span><ChevronDown size={15} /></button>
       {project && <div className="project-list">{projects.map((item) => <button key={item.id} className={`project-option ${item.id === project.id ? "active" : ""}`} onClick={() => chooseProject(item.id)}><span className="project-dot" />{item.name}</button>)}</div>}
       <div className="sidebar-label nav-caption">PROJECT</div>
-      <nav className="side-nav">{navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setPage(id)} className={`nav-item ${page === id ? "selected" : ""}`}><Icon size={17} strokeWidth={1.8} /><span>{label}</span>{id === "requirements" && requirements.length > 0 && <span className="nav-count">{requirements.length}</span>}</button>)}</nav>
+      <nav className="side-nav">{navItems.filter(({ id }) => id !== "monitoring" || user?.role.toLowerCase() === "admin").map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setPage(id)} className={`nav-item ${page === id ? "selected" : ""}`}><Icon size={17} strokeWidth={1.8} /><span>{label}</span>{id === "requirements" && requirements.length > 0 && <span className="nav-count">{requirements.length}</span>}</button>)}</nav>
       <div className="sidebar-bottom"><div className="system-card"><span className="pulse-dot" /><div><b>API connected</b><small>{apiUrl.replace(/^https?:\/\//, "")}</small></div><Check size={14} /></div><button className="nav-item subtle"><Settings2 size={17} /><span>Settings</span></button><button className="nav-item subtle"><CircleHelp size={17} /><span>Help center</span></button><div className="user-card"><div className="avatar">{(user?.full_name || user?.email || "U").slice(0, 1).toUpperCase()}</div><div className="user-meta"><b>{user?.full_name ?? "Workspace member"}</b><small>{user?.role ?? "member"}</small></div><button className="icon-button" title="Sign out" onClick={signOut}><LogOut size={16} /></button></div></div>
     </aside>
     <main className="main-area">
@@ -236,7 +242,8 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
       <div className="content-wrap">
         {(error || notice) && <div className={`toast ${error ? "toast-error" : "toast-success"}`}><span>{error || notice}</span><button onClick={() => { setError(""); setNotice(""); }}><X size={15} /></button></div>}
         {!project ? <EmptyProjects onCreate={() => setShowCreate(true)} /> : <>
-          <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> PROJECT CONSOLE</div><h1>{page === "overview" ? "Project overview" : page === "requirements" ? "Requirements" : page === "artifacts" ? "Generated artifacts" : "Activity"}</h1><p>{page === "overview" ? "A clear view of your SDLC workspace and recent progress." : page === "requirements" ? "Manage source documents and turn them into structured engineering outputs." : page === "artifacts" ? "Review and explore AI generated project deliverables." : "A timeline of work across this project."}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={refresh}><RefreshCw size={15} /> Refresh</button><button className="button button-primary" onClick={() => setPage("requirements")}><Plus size={16} /> Add requirement</button></div></section>
+          {page !== "monitoring" && <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> PROJECT CONSOLE</div><h1>{page === "overview" ? "Project overview" : page === "requirements" ? "Requirements" : page === "artifacts" ? "Generated artifacts" : "Activity"}</h1><p>{page === "overview" ? "A clear view of your SDLC workspace and recent progress." : page === "requirements" ? "Manage source documents and turn them into structured engineering outputs." : page === "artifacts" ? "Review and explore AI generated project deliverables." : "A timeline of work across this project."}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={refresh}><RefreshCw size={15} /> Refresh</button><button className="button button-primary" onClick={() => setPage("requirements")}><Plus size={16} /> Add requirement</button></div></section>}
+          {page === "monitoring" && user?.role.toLowerCase() === "admin" && <LangfuseMonitoring token={token} />}
           {page === "overview" && <>
             <div className="metric-grid"><Metric label="Requirements" value={requirements.length} helper="Source documents" icon={FileText} color="amber" /><Metric label="Artifacts" value={artifacts.length} helper="Generated outputs" icon={Layers3} color="purple" /><Metric label="Project health" value={requirements.length ? "Active" : "Ready"} helper={requirements.length ? "Pipeline operational" : "Awaiting first input"} icon={ShieldCheck} color="green" /><Metric label="Last updated" value={artifacts[0] ? formatDate(artifacts[0].created_at) : "â€”"} helper="Most recent artifact" icon={Clock3} color="blue" /></div>
             <div className="metric-grid"><Metric label="Orchestrated runs" value={runMetrics.run_count} helper={`${runMetrics.status_counts?.completed ?? 0} completed`} icon={Activity} color="green" /><Metric label="Tokens used" value={runMetrics.total_tokens.toLocaleString()} helper={`${runMetrics.prompt_tokens.toLocaleString()} input · ${runMetrics.completion_tokens.toLocaleString()} output`} icon={Sparkles} color="purple" /><Metric label="Average latency" value={`${runMetrics.average_latency_ms.toLocaleString()} ms`} helper="Across persisted runs" icon={Clock3} color="blue" /><Metric label="Estimated cost" value={runMetrics.estimated_cost_usd === null ? "Not configured" : `$${runMetrics.estimated_cost_usd.toFixed(4)}`} helper="Configure token rates in the backend" icon={Coins} color="amber" /></div>

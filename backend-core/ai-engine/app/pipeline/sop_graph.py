@@ -30,6 +30,7 @@ from app.config import settings
 from app.llm.provider import get_llm
 from app.pipeline.chain import build_generation_chain, retrieve_context
 from app.pipeline.quality_check import _strip_code_fences, format_compliance_score
+from app.tracking.langfuse import build_langfuse_config, flush_langfuse
 
 logger = logging.getLogger("sprintsmith.sop")
 
@@ -97,7 +98,7 @@ def retrieve_node(state: ArtifactState) -> dict:
     return {"context": result.context, "retrieval_trace": result.trace}
 
 
-def pm_node(state: ArtifactState) -> dict:
+def pm_node(state: ArtifactState, config: dict | None = None) -> dict:
     """Product Manager: drafts the artifact from requirement + precomputed context."""
     schema_cls = _get_schema(state["artifact_type"])
     alias = state.get("model_alias") or settings.DEFAULT_LLM
@@ -118,7 +119,7 @@ def pm_node(state: ArtifactState) -> dict:
 
     raw = None
     try:
-        raw = chain.invoke(inputs)
+        raw = chain.invoke(inputs, config=config) if config else chain.invoke(inputs)
     except Exception as e:
         # Provider-side failure: switch once to the fallback model, as quality_check does.
         fallback = settings.FALLBACK_LLM
@@ -127,7 +128,7 @@ def pm_node(state: ArtifactState) -> dict:
         logger.warning("Draft model %s failed (%s: %s); switching to fallback %s.",
                        alias, type(e).__name__, e, fallback)
         chain, _, version_id = build_generation_chain(state["artifact_type"], schema_cls, model_alias=fallback)
-        raw = chain.invoke(inputs)
+        raw = chain.invoke(inputs, config=config) if config else chain.invoke(inputs)
         alias = fallback
 
     usage = _accumulate(state.get("usage", {}), getattr(raw, "usage_metadata", None) or {})
@@ -139,7 +140,8 @@ def pm_node(state: ArtifactState) -> dict:
     }
 
 
-def judge_score(requirement: str, artifact_json: str) -> tuple[float, str]:
+def judge_score(requirement: str, artifact_json: str,
+                config: dict | None = None) -> tuple[float, str]:
     """
     LLM-as-Judge (Layer 1, §4.2). openevals-compatible: one model call that returns
     {"score": float, "reasoning": str}. Falls back to an optimistic default when the
@@ -149,7 +151,8 @@ def judge_score(requirement: str, artifact_json: str) -> tuple[float, str]:
     inspect_sensitive_text(requirement + "\n" + artifact_json)
     try:
         llm = get_llm(settings.EVAL_JUDGE_LLM, temperature=0.0)
-        out = llm.invoke(_JUDGE_PROMPT.format(requirement=requirement, artifact=artifact_json))
+        prompt = _JUDGE_PROMPT.format(requirement=requirement, artifact=artifact_json)
+        out = llm.invoke(prompt, config=config) if config else llm.invoke(prompt)
         text = _strip_code_fences(_extract_text(out))
         match = _JSON_RE.search(text)
         parsed = json.loads(match.group(0) if match else text)
@@ -163,7 +166,7 @@ def judge_score(requirement: str, artifact_json: str) -> tuple[float, str]:
         return 0.85, "judge skipped: " + str(e)
 
 
-def qa_node(state: ArtifactState) -> dict:
+def qa_node(state: ArtifactState, config: dict | None = None) -> dict:
     """QA Engineer: run schema validation before the LLM-as-Judge."""
     schema_cls = _get_schema(state["artifact_type"])
     raw_text = _strip_code_fences(state.get("draft_raw", ""))
@@ -178,7 +181,7 @@ def qa_node(state: ArtifactState) -> dict:
             "critique": "Output does not conform to the required JSON schema.",
             "retry_count": state["retry_count"] + 1,
         }
-    judge = LLMJudgeValidator(APPROVAL_THRESHOLD)
+    judge = LLMJudgeValidator(APPROVAL_THRESHOLD, config=config)
     chain = ValidationChain([SchemaValidator(schema_cls), judge])
     passed, failures = chain.run(parsed.model_dump(), state["requirement_text"])
     score = judge.score if judge.score is not None else 0.0
@@ -246,11 +249,22 @@ def _initial_state(artifact_type: str, project_id: str, requirement_text: str,
 
 def run_sop_generation(artifact_type: str, project_id: str, requirement_text: str,
                        schema_cls, model_alias: str | None = None,
-                       retrieval_mode: str | None = None) -> dict:
+                       retrieval_mode: str | None = None,
+                       request_id: str | None = None) -> dict:
     """Drop-in replacement for run_generation(); schema_cls kept for signature parity
     but resolved again from the registry (W-4: no classes in graph state)."""
-    final = SOP_GRAPH.invoke(_initial_state(artifact_type, project_id, requirement_text,
-                                            model_alias, retrieval_mode))
+    langfuse_config = build_langfuse_config(
+        project_id=project_id, artifact_type=artifact_type, request_id=request_id,
+    )
+    try:
+        initial_state = _initial_state(artifact_type, project_id, requirement_text,
+                                      model_alias, retrieval_mode)
+        if langfuse_config:
+            final = SOP_GRAPH.invoke(initial_state, config=langfuse_config)
+        else:
+            final = SOP_GRAPH.invoke(initial_state)
+    finally:
+        flush_langfuse()
     if not final["final_artifact"]:
         raise RuntimeError("SOP graph produced no artifact after exhausting retries.")
     usage = dict(final.get("usage") or {})

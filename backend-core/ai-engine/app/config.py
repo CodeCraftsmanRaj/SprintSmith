@@ -67,6 +67,15 @@ class Settings:
     PORT: int = int(os.environ.get("AI_ENGINE_PORT", "8001"))
     LOG_LEVEL: str = os.environ.get("LOG_LEVEL", "INFO")
 
+    # --- Langfuse observability (enabled when both project keys are configured) ---
+    LANGFUSE_PUBLIC_KEY: str = os.environ.get("LANGFUSE_PUBLIC_KEY", "")
+    LANGFUSE_SECRET_KEY: str = os.environ.get("LANGFUSE_SECRET_KEY", "")
+    LANGFUSE_BASE_URL: str = os.environ.get("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
+    LANGFUSE_ENABLED: bool = os.environ.get(
+        "LANGFUSE_ENABLED",
+        "true" if (LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY) else "false",
+    ).lower() in ("1", "true", "yes", "on")
+
     # --- Quota guardrail (Gemini free tier daily cap — configurable, not hardcoded) ---
     DAILY_REQUEST_QUOTA: int = int(os.environ.get("DAILY_REQUEST_QUOTA", "1500"))
 

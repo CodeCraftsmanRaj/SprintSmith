@@ -81,7 +81,10 @@ def generate(req: GenerateRequest):
     request_id = str(uuid.uuid4())
     start = time.monotonic()
     try:
-        result = sop_graph.run_sop_generation(req.artifact_type, req.project_id, req.requirement_text, schema_cls)
+        result = sop_graph.run_sop_generation(
+            req.artifact_type, req.project_id, req.requirement_text, schema_cls,
+            request_id=request_id,
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=f"LLM generation failed validation: {e}")
     except Exception as e:
@@ -123,8 +126,20 @@ async def generate_stream(req: GenerateRequest):
         }
         request_id = str(uuid.uuid4())
         start = time.monotonic()
+        from app.tracking.langfuse import build_langfuse_config, flush_langfuse
+
+        langfuse_config = build_langfuse_config(
+            project_id=req.project_id, artifact_type=req.artifact_type, request_id=request_id,
+        )
         try:
-            async for update in sop_graph.SOP_GRAPH.astream(accumulated, stream_mode="updates"):
+            stream = (
+                sop_graph.SOP_GRAPH.astream(
+                    accumulated, config=langfuse_config, stream_mode="updates",
+                )
+                if langfuse_config
+                else sop_graph.SOP_GRAPH.astream(accumulated, stream_mode="updates")
+            )
+            async for update in stream:
                 for node, delta in update.items():
                     if isinstance(delta, dict):
                         accumulated.update(delta)
@@ -134,6 +149,7 @@ async def generate_stream(req: GenerateRequest):
                                 "critique": (delta or {}).get("critique", "") if isinstance(delta, dict) else ""})
         except Exception as e:
             logger.exception("Streaming generation failed")
+            flush_langfuse()
             yield _sse({"error": str(e)})
             yield "data: [DONE]\n\n"
             return
@@ -151,6 +167,7 @@ async def generate_stream(req: GenerateRequest):
             retry_count=accumulated.get("retry_count", 0),
             model_used=accumulated.get("model_used"),
         ).model_dump()})
+        flush_langfuse()
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
