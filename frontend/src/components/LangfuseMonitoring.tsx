@@ -137,7 +137,7 @@ export function LangfuseMonitoring({ token }: { token: string }) {
   useEffect(() => { void load(); }, [load]);
 
   const observations = data?.observations ?? [];
-  const models = useMemo(() => [...new Set(observations.map((item) => item.model).filter((model): model is string => Boolean(model)))].sort(), [observations]);
+  const models = useMemo(() => [...new Set(observations.map((item) => item.model).filter((model): model is string => Boolean(model)))].sort((a, b) => a.localeCompare(b)), [observations]);
   const filtered = useMemo(() => observations.filter((item) => {
     const matchesModel = modelFilter === "all" || item.model === modelFilter;
     const haystack = [item.name, item.traceName, item.model, item.traceId, item.metadata?.["request_id"]]
