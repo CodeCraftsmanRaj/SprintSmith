@@ -26,7 +26,7 @@ from app.llm.provider import get_llm
 from app.pipeline.quality_check import _strip_code_fences
 from app.pipeline.sanitize import sanitize_artifact
 from app.pipeline import llm_cache
-from app.pipeline.secret_scan import raise_if_secrets_found
+from app.pipeline.secret_scan import inspect_sensitive_text, raise_if_secrets_found
 from app.pipeline.llm_errors import LLMNodeFailure
 from app.schemas.acceptance_criteria import AcceptanceCriteriaList, AcceptanceCriterion
 from app.schemas.test_case import TestCase, TestCaseList
@@ -271,6 +271,7 @@ def _invoke_json_agent(
     schema_cls: type[BaseModel],
     model_alias: str | None = None,
 ) -> tuple[BaseModel, Any, str]:
+    inspect_sensitive_text(user_prompt)
     alias = model_alias or settings.DEFAULT_LLM
     llm = get_llm(alias, temperature=0.1)
     messages = [
@@ -612,6 +613,7 @@ def composer_node(state: OrchestratedState) -> dict[str, Any]:
         )
 
     cleaned_md, report = sanitize_artifact(artifact.render_markdown())
+    sensitive_report = inspect_sensitive_text(cleaned_md)
     artifact.rendered_markdown = cleaned_md
     artifact.sanitize_report = {
         "is_clean": report.is_clean,
@@ -619,6 +621,7 @@ def composer_node(state: OrchestratedState) -> dict[str, Any]:
         "invisible_chars_stripped": report.invisible_chars_stripped,
         "fences_rewritten": report.fences_rewritten,
         "truncated_at": report.truncated_at,
+        "pii_categories": sensitive_report["pii"],
     }
     final_dict = artifact.model_dump()
     return {

@@ -41,7 +41,17 @@ class AIEngineClient(AIEnginePort):
                         )
                         await asyncio.sleep(0.25)
                         continue
-                    response.raise_for_status()
+                    try:
+                        response.raise_for_status()
+                    except httpx.HTTPStatusError as exc:
+                        try:
+                            upstream_body = exc.response.json()
+                            upstream_detail = upstream_body.get("detail") if isinstance(upstream_body, dict) else None
+                        except ValueError:
+                            upstream_detail = None
+                        if isinstance(upstream_detail, dict) and "error_class" in upstream_detail:
+                            raise HTTPException(status_code=502, detail=upstream_detail) from exc
+                        raise
                     return response.json()
         except httpx.HTTPStatusError as exc:
             upstream_status = exc.response.status_code

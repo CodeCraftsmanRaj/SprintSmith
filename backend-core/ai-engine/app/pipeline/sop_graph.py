@@ -108,6 +108,8 @@ def pm_node(state: ArtifactState) -> dict:
         "context": state.get("context", ""),
         "repair_note": "",
     }
+    from app.pipeline.secret_scan import inspect_sensitive_text
+    inspect_sensitive_text(inputs["requirement"] + "\n" + inputs["context"])
     if state["retry_count"] > 0:
         inputs["repair_note"] = (
             f"QA review found issues (attempt {state['retry_count']}): {state['critique']}. "
@@ -143,6 +145,8 @@ def judge_score(requirement: str, artifact_json: str) -> tuple[float, str]:
     {"score": float, "reasoning": str}. Falls back to an optimistic default when the
     judge itself is unavailable, so generation never fails because evaluation did.
     """
+    from app.pipeline.secret_scan import inspect_sensitive_text
+    inspect_sensitive_text(requirement + "\n" + artifact_json)
     try:
         llm = get_llm(settings.EVAL_JUDGE_LLM, temperature=0.0)
         out = llm.invoke(_JUDGE_PROMPT.format(requirement=requirement, artifact=artifact_json))

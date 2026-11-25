@@ -199,12 +199,29 @@ class WorkflowRunService:
         runs = self.run_repo.list_runs(project_id, limit=1000)
         statuses: dict[str, int] = {}
         prompt_tokens = completion_tokens = latency_ms = 0
+        variants: dict[str, dict[str, Any]] = {}
         for run in runs:
             statuses[run.status] = statuses.get(run.status, 0) + 1
             usage = run.usage or {}
             prompt_tokens += int(usage.get("prompt_tokens", 0) or 0)
             completion_tokens += int(usage.get("completion_tokens", 0) or 0)
             latency_ms += int(run.latency_ms or 0)
+            for node, assignment in (run.prompt_assignments or {}).items():
+                variant_key = f"{node}:{assignment.get('version', 'unknown')}"
+                metric = variants.setdefault(variant_key, {
+                    "node_id": node, "version": assignment.get("version"),
+                    "experiment_id": assignment.get("experiment_id"), "run_count": 0,
+                    "prompt_tokens": 0, "completion_tokens": 0, "latency_ms": 0,
+                    "review_score_total": 0.0, "review_score_count": 0,
+                })
+                metric["run_count"] += 1
+                metric["prompt_tokens"] += int(usage.get("prompt_tokens", 0) or 0)
+                metric["completion_tokens"] += int(usage.get("completion_tokens", 0) or 0)
+                metric["latency_ms"] += int(run.latency_ms or 0)
+                score = ((run.final_artifact or {}).get("review") or {}).get("score")
+                if score is not None:
+                    metric["review_score_total"] += float(score)
+                    metric["review_score_count"] += 1
         input_rate = os.getenv("SPRINTSMITH_INPUT_COST_PER_1K_TOKENS")
         output_rate = os.getenv("SPRINTSMITH_OUTPUT_COST_PER_1K_TOKENS")
         estimated_cost = None
@@ -213,12 +230,27 @@ class WorkflowRunService:
                 estimated_cost = (prompt_tokens * float(input_rate) + completion_tokens * float(output_rate)) / 1000
             except ValueError:
                 estimated_cost = None
+        variant_metrics = []
+        for metric in variants.values():
+            count = metric.pop("review_score_count")
+            score_total = metric.pop("review_score_total")
+            metric["average_review_score"] = round(score_total / count, 4) if count else None
+            metric["average_latency_ms"] = round(metric["latency_ms"] / metric["run_count"]) if metric["run_count"] else 0
+            try:
+                metric["estimated_cost_usd"] = round((
+                    metric["prompt_tokens"] * float(input_rate) +
+                    metric["completion_tokens"] * float(output_rate)
+                ) / 1000, 6) if input_rate is not None and output_rate is not None else None
+            except ValueError:
+                metric["estimated_cost_usd"] = None
+            variant_metrics.append(metric)
         return {"run_count": len(runs), "status_counts": statuses,
                 "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
                 "total_tokens": prompt_tokens + completion_tokens,
                 "total_latency_ms": latency_ms,
                 "average_latency_ms": round(latency_ms / len(runs)) if runs else 0,
-                "estimated_cost_usd": round(estimated_cost, 6) if estimated_cost is not None else None}
+                "estimated_cost_usd": round(estimated_cost, 6) if estimated_cost is not None else None,
+                "prompt_variant_metrics": variant_metrics}
 
     def get_events(self, run_id: str, user: User) -> list[dict[str, Any]]:
         run = self.run_repo.get_run(run_id)

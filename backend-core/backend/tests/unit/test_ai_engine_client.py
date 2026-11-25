@@ -101,6 +101,23 @@ async def test_upstream_http_error_maps_to_502(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_llm_failure_envelope_is_preserved(monkeypatch):
+    envelope = {"agent": "analyst", "error_class": "TimeoutError", "http_status": None,
+                "message": "provider timed out", "retries_attempted": 1,
+                "occurred_at": "2026-01-01T00:00:00+00:00"}
+    fake = FakeAsyncClient(response=httpx.Response(
+        502, json={"detail": envelope}, request=httpx.Request("POST", "http://ai/runs/start"),
+    ))
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: fake)
+
+    with pytest.raises(HTTPException) as error:
+        await AIEngineClient("http://ai")._request("POST", "/runs/start", json={})
+
+    assert error.value.status_code == 502
+    assert error.value.detail == envelope
+
+
+@pytest.mark.asyncio
 async def test_upstream_timeout_maps_to_503(monkeypatch):
     request = httpx.Request("GET", "http://ai/health")
     fake = FakeAsyncClient(error=httpx.ReadTimeout("timed out", request=request))

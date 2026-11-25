@@ -25,7 +25,8 @@ class OrchestrationPromptCreate(BaseModel):
 def create_orchestration_prompt(node_id: str, payload: OrchestrationPromptCreate,
                                 db: Session = Depends(get_db),
                                 user: User = Depends(require_role("admin"))):
-    if node_id not in {"analyst", "story_writer", "ac_generator", "test_case_writer"}:
+    if node_id not in {"analyst", "story_writer", "ac_generator", "test_case_writer",
+                       "api_spec", "architecture", "sprint_plan"}:
         raise HTTPException(status_code=422, detail="Unsupported orchestration node")
     if payload.experiment_id and payload.weight not in range(1, 101):
         raise HTTPException(status_code=422, detail="Experiment variant weight must be 1..100")

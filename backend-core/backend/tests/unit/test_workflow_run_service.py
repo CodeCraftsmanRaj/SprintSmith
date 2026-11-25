@@ -136,4 +136,9 @@ def test_prompt_variant_assignment_is_stable_and_persisted():
     assert assignment == assignment_again
     assert assignment["analyst"]["experiment_id"] == "exp-1"
     assert selected["analyst"] in {"prompt A", "prompt B"}
+    started = asyncio.run(service.start_run(project_id=project.id, user=user, requirement_text="Make a small change"))
+    assert started["prompt_assignments"]["analyst"]["experiment_id"] == "exp-1"
+    metrics = service.metrics(project.id, user)
+    assert metrics["prompt_variant_metrics"][0]["run_count"] == 1
+    assert metrics["prompt_variant_metrics"][0]["node_id"] == "analyst"
     db.close()
