@@ -50,6 +50,26 @@ describe("coverage for lightweight UI wrappers", () => {
     expect(screen.getByRole("grid")).toBeInTheDocument();
     expect(screen.getByRole("gridcell", { name: /Wednesday, January 15th, 2025/i })).toBeInTheDocument();
   });
+
+  it("renders a selected date range, week numbers, dropdown caption, and caller overrides", () => {
+    render(<Calendar
+      mode="range"
+      defaultMonth={new Date(2025, 0, 1)}
+      selected={{ from: new Date(2025, 0, 10), to: new Date(2025, 0, 12) }}
+      captionLayout="dropdown"
+      buttonVariant="outline"
+      showOutsideDays={false}
+      showWeekNumber
+      className="calendar-test"
+      classNames={{ month: "custom-month" }}
+      components={{ WeekNumber: ({ children }) => <td data-testid="week-number">{children}</td> }}
+    />);
+    expect(document.querySelector(".calendar-test")).toBeInTheDocument();
+    expect(document.querySelector(".custom-month")).toBeInTheDocument();
+    expect(screen.getAllByTestId("week-number").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /Friday, January 10th, 2025/i })).toHaveAttribute("data-range-start", "true");
+    expect(screen.getByRole("button", { name: /Sunday, January 12th, 2025/i })).toHaveAttribute("data-range-end", "true");
+  });
 });
 
 describe("coverage for server utilities", () => {

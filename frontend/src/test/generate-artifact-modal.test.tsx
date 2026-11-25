@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import {
   GenerateArtifactModal,
   buildRequirementText,
@@ -63,7 +63,7 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
 
       expect(screen.getByRole("dialog")).toBeInTheDocument();
       expect(screen.getByText("AI WORKFLOW · STEP 1 OF 3")).toBeInTheDocument();
-      expect(screen.getByText("Select an artifact type")).toBeInTheDocument();
+      expect(screen.getByText("Select artifact types")).toBeInTheDocument();
 
       const continueBtn = screen.getByRole("button", { name: /continue/i });
       expect(continueBtn).toBeDisabled();
@@ -128,9 +128,9 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
       expect(previewBtn).not.toBeDisabled();
 
       // Test "Change artifact type" back link
-      const backLink = screen.getByRole("button", { name: /change artifact type/i });
+      const backLink = screen.getByRole("button", { name: /change artifact types/i });
       fireEvent.click(backLink);
-      expect(screen.getByText("Select an artifact type")).toBeInTheDocument();
+      expect(screen.getByText("Select artifact types")).toBeInTheDocument();
     });
 
     it("handles multi-select chips and range controls on test_case artifact", () => {
@@ -206,7 +206,7 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
       fireEvent.click(screen.getByRole("button", { name: /preview prompt/i }));
 
       expect(screen.getByText("AI WORKFLOW · STEP 3 OF 3")).toBeInTheDocument();
-      expect(screen.getByText("Review your prompt")).toBeInTheDocument();
+      expect(screen.getByText("Review your prompts")).toBeInTheDocument();
 
       const previewBlock = screen.getByText(/\[ARTIFACT\]: User Story/);
       expect(previewBlock).toBeInTheDocument();
@@ -219,9 +219,58 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
 
       expect(handleGenerate).toHaveBeenCalledTimes(1);
       expect(handleGenerate).toHaveBeenCalledWith(
-        "user_story",
-        expect.stringContaining("Fraud Detection"),
+        [expect.objectContaining({ type: "user_story", text: expect.stringContaining("Fraud Detection") })],
       );
+    });
+
+    it.each([
+      ["User Story", /Feature \/ Initiative Title/i, "Loan Application and Eligibility Pre-Check"],
+      ["Acceptance Criteria", /User Story Title \/ ID/i, "FR-03 - Loan Application and Eligibility Pre-Check"],
+      ["Test Case", /Feature \/ Function Being Tested/i, "Loan Application and Eligibility Pre-Check"],
+      ["Sprint Plan", /Sprint Goal/i, "Develop the personal loan application"],
+      ["Architecture Recommendation", /System \/ Service Name/i, "Digital Personal Loan Origination Portal"],
+      ["API Specification", /API Name \/ Purpose/i, "Personal Loan Application and Eligibility API"],
+    ])("loads fixed demo data for %s and enables prompt preview", (typeName, label, expected) => {
+      render(<GenerateArtifactModal busy={false} error="" onClose={handleClose} onGenerate={handleGenerate} />);
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(typeName, "i") }));
+      fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+      expect(screen.queryByRole("button", { name: /use demo data/i })).toBeInTheDocument();
+      const preview = screen.getByRole("button", { name: /preview prompts/i });
+      expect(preview).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: /use demo data/i }));
+
+      expect((screen.getByLabelText(label) as HTMLInputElement | HTMLTextAreaElement).value).toContain(expected);
+      expect(preview).toBeEnabled();
+    });
+
+    it("loads demo dropdown, chip, and range values and keeps them isolated by artifact type", () => {
+      render(<GenerateArtifactModal busy={false} error="" onClose={handleClose} onGenerate={handleGenerate} />);
+      fireEvent.click(screen.getByRole("button", { name: /test case/i }));
+      fireEvent.click(screen.getByRole("button", { name: /sprint plan/i }));
+      fireEvent.click(screen.getByRole("button", { name: /acceptance criteria/i }));
+      fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+      const acceptanceSection = screen.getByText("Acceptance Criteria details").closest("section")!;
+      expect(within(acceptanceSection).getByLabelText(/User Story Title \/ ID/i)).toHaveValue("");
+      fireEvent.click(within(acceptanceSection).getByRole("button", { name: /use demo data/i }));
+      expect(within(acceptanceSection).getByLabelText(/Output Format/i)).toHaveValue("Gherkin BDD");
+      fireEvent.change(within(acceptanceSection).getByLabelText(/User Story Title \/ ID/i), { target: { value: "Manual edit" } });
+      fireEvent.click(within(acceptanceSection).getByRole("button", { name: /use demo data/i }));
+      expect(within(acceptanceSection).getByLabelText(/User Story Title \/ ID/i)).toHaveValue("FR-03 - Loan Application and Eligibility Pre-Check");
+
+      const testCaseSection = screen.getByText("Test Case details").closest("section")!;
+      expect(within(testCaseSection).getByRole("slider")).toHaveValue("1");
+      fireEvent.click(within(testCaseSection).getByRole("button", { name: /use demo data/i }));
+      expect(within(testCaseSection).getByRole("button", { name: "Integration" })).toHaveClass("chosen");
+      expect(within(testCaseSection).getByRole("button", { name: "End-to-End" })).toHaveClass("chosen");
+      expect(within(testCaseSection).getByRole("slider")).toHaveValue("6");
+
+      const sprintSection = screen.getByText("Sprint Plan details").closest("section")!;
+      expect((within(sprintSection).getByLabelText(/Team Velocity/i) as HTMLInputElement).value).toBe("");
+      fireEvent.click(within(sprintSection).getByRole("button", { name: /use demo data/i }));
+      expect(within(sprintSection).getByLabelText(/Sprint Duration/i)).toHaveValue("2 weeks");
+      expect(within(sprintSection).getByLabelText(/Team Velocity/i)).toHaveValue(20);
     });
 
     it("displays error states including friendly vector retrieval timeout message", () => {
@@ -256,6 +305,18 @@ describe("GenerateArtifactModal and buildRequirementText", () => {
           "Your inputs are still here. Try Generate artifact again in a moment.",
         ),
       ).toBeInTheDocument();
+    });
+
+    it.each([
+      ["AI engine is unavailable", "The AI engine is temporarily unavailable."],
+      ["AI engine is temporarily unavailable", "The AI engine is temporarily unavailable."],
+      ["AI engine returned an invalid response", "The AI engine returned an invalid response."],
+      ["invalid artifact response", "The AI engine returned an invalid response."],
+      ["invalid artifact payload", "The AI engine returned an invalid response."],
+    ])("shows a specific retry message for %s", (error, expectedMessage) => {
+      render(<GenerateArtifactModal busy={false} error={error} onClose={handleClose} onGenerate={handleGenerate} />);
+      expect(screen.getByRole("alert")).toHaveTextContent(expectedMessage);
+      expect(screen.getByRole("alert")).toHaveTextContent(`Your prompt is still here. ${error} You can retry when ready.`);
     });
 
     it("shows loading state when busy is true", () => {

@@ -6,6 +6,8 @@ import * as backendApi from "@/lib/backend-api";
 describe("Workspace - Authentication", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
+    window.history.replaceState({}, "", "/");
     vi.restoreAllMocks();
   });
 
@@ -204,5 +206,37 @@ describe("Workspace - Authentication", () => {
 
     expect(localStorage.getItem("sprintsmith_access_token")).toBeNull();
     expect(screen.getByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
+  });
+
+  it("accepts an invitation, selects the invited project, and clears the invitation URL and storage", async () => {
+    window.history.replaceState({}, "", "/?invite=invite-token&keep=1");
+    sessionStorage.setItem("sprintsmith_pending_invitation", "stale-token");
+    localStorage.setItem("sprintsmith_access_token", "session-token");
+    const api = vi.spyOn(backendApi, "api").mockImplementation((path) => {
+      if (path === "/api/v1/auth/me") return Promise.resolve({ id: "u1", email: "invite@test.dev", full_name: "Invited user", role: "editor" });
+      if (path === "/api/v1/projects") return Promise.resolve([{ id: "invited-project", name: "Invited project", description: "", created_at: "2026-01-01" }]);
+      if (path === "/api/v1/projects/invitations/accept") return Promise.resolve({ project_id: "invited-project", project_name: "Invited project", role: "editor" });
+      if (path.endsWith("/members")) return Promise.resolve({ current_role: "editor" });
+      return Promise.resolve([]);
+    });
+    render(<Workspace />);
+    await waitFor(() => expect(screen.getByText("Invitation accepted. You joined Invited project as editor.")).toBeInTheDocument());
+    expect(api).toHaveBeenCalledWith("/api/v1/projects/invitations/accept", "session-token", expect.objectContaining({ method: "POST", body: JSON.stringify({ token: "invite-token" }) }));
+    expect(window.location.search).toBe("?keep=1");
+    expect(sessionStorage.getItem("sprintsmith_pending_invitation")).toBeNull();
+    expect(screen.getByText("editor")).toBeInTheDocument();
+  });
+
+  it("shows a safe fallback when invitation acceptance rejects a non-Error value", async () => {
+    window.history.replaceState({}, "", "/?invite=bad-token");
+    localStorage.setItem("sprintsmith_access_token", "session-token");
+    vi.spyOn(backendApi, "api").mockImplementation((path) => {
+      if (path === "/api/v1/auth/me") return Promise.resolve({ id: "u1", email: "user@test.dev", full_name: "User", role: "member" });
+      if (path === "/api/v1/projects") return Promise.resolve([]);
+      if (path === "/api/v1/projects/invitations/accept") return Promise.reject("invalid");
+      return Promise.resolve([]);
+    });
+    render(<Workspace />);
+    expect(await screen.findByText("Could not accept this project invitation.")).toBeInTheDocument();
   });
 });

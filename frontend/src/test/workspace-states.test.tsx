@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Workspace } from "@/screens/workspace";
+import { formatDate, Workspace } from "@/screens/workspace";
 import * as backendApi from "@/lib/backend-api";
 
 const user = { id: "u1", email: "qa@example.com", full_name: "QA User", role: "member" };
@@ -42,6 +42,40 @@ describe("Workspace loading and artifact details", () => {
     render(<Workspace />);
 
     expect(await screen.findByText("Workspace service unavailable")).toBeInTheDocument();
+  });
+
+  it("shows the Last Updated fallback until the project has a valid artifact timestamp", async () => {
+    mockWorkspace();
+    render(<Workspace />);
+    expect(await screen.findByText("Not updated yet")).toBeInTheDocument();
+  });
+
+  it("uses the Last Updated fallback when the latest artifact timestamp is invalid", async () => {
+    mockWorkspace([{ ...story, created_at: "not-a-date" }]);
+    render(<Workspace />);
+    expect(await screen.findByText("Not updated yet")).toBeInTheDocument();
+  });
+
+  it("shows the formatted artifact date in the Last Updated card", async () => {
+    mockWorkspace([story]);
+    render(<Workspace />);
+    expect(await screen.findByText(formatDate(story.created_at))).toBeInTheDocument();
+  });
+
+  it.each([null, undefined, "", "not-a-date"])(
+    "formats missing or invalid timestamps as Not updated yet (%s)",
+    (value) => {
+      expect(formatDate(value)).toBe("Not updated yet");
+    },
+  );
+
+  it("opens the project-specific Kanban Board tab", async () => {
+    mockWorkspace();
+    render(<Workspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Kanban Board" }));
+    expect(await screen.findByRole("heading", { name: "Kanban Board" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "To Do tasks" })).toBeInTheDocument();
+    expect(backendApi.api).toHaveBeenCalledWith("/api/v1/projects/p1/tasks", "test-token");
   });
 
   it("shows the artifact document and toggles to its source JSON", async () => {
@@ -100,6 +134,68 @@ describe("Workspace loading and artifact details", () => {
       );
       expect(screen.getByRole("heading", { name: "Customer transfer story" })).toBeInTheDocument();
     });
+  });
+
+  it("generates each selected artifact for the active project and opens the final result", async () => {
+    const generated = [
+      { ...story, id: "story-generated", title: "Loan application story" },
+      { ...story, id: "criteria-generated", artifact_type: "acceptance_criteria", title: "Loan application criteria" },
+    ];
+    let index = 0;
+    const api = mockWorkspace().mockImplementation((path, _token, init) => {
+      if (path === "/api/v1/auth/me") return Promise.resolve(user);
+      if (path === "/api/v1/projects") return Promise.resolve([project]);
+      if (path === "/api/v1/projects/p1/requirements") return Promise.resolve([]);
+      if (path === "/api/v1/projects/p1/artifacts") return Promise.resolve([]);
+      if (path === "/api/v1/projects/p1/generate" && init?.method === "POST") return Promise.resolve(generated[index++]);
+      return Promise.resolve({});
+    });
+    render(<Workspace />);
+    fireEvent.click(await screen.findByRole("button", { name: /Requirements/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Generate Artifact/i }));
+    fireEvent.click(screen.getByRole("button", { name: /User Story/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Acceptance Criteria/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continue/i }));
+    const storySection = screen.getByText("User Story details").closest("section")!;
+    const criteriaSection = screen.getByText("Acceptance Criteria details").closest("section")!;
+    fireEvent.click(within(storySection).getByRole("button", { name: /Use Demo Data/i }));
+    fireEvent.click(within(criteriaSection).getByRole("button", { name: /Use Demo Data/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Preview prompts/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Generate 2 artifacts/i }));
+
+    await waitFor(() => expect(api.mock.calls.filter(([path, , init]) => path === "/api/v1/projects/p1/generate" && init?.method === "POST")).toHaveLength(2));
+    expect(screen.getByRole("heading", { level: 2, name: "Loan application criteria" })).toBeInTheDocument();
+    expect(screen.getByText("2 artifacts generated successfully")).toBeInTheDocument();
+  });
+
+  it("reports partial artifact generation failures with the completed count", async () => {
+    let generatedCount = 0;
+    const api = mockWorkspace().mockImplementation((path, _token, init) => {
+      if (path === "/api/v1/auth/me") return Promise.resolve(user);
+      if (path === "/api/v1/projects") return Promise.resolve([project]);
+      if (path === "/api/v1/projects/p1/requirements") return Promise.resolve([]);
+      if (path === "/api/v1/projects/p1/artifacts") return Promise.resolve([]);
+      if (path === "/api/v1/projects/p1/generate" && init?.method === "POST") {
+        generatedCount += 1;
+        return generatedCount === 1 ? Promise.resolve(story) : Promise.reject(new Error("Generator unavailable"));
+      }
+      return Promise.resolve({});
+    });
+    render(<Workspace />);
+    fireEvent.click(await screen.findByRole("button", { name: /Requirements/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Generate Artifact/i }));
+    fireEvent.click(screen.getByRole("button", { name: /User Story/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Acceptance Criteria/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Continue/i }));
+    for (const label of ["User Story details", "Acceptance Criteria details"]) {
+      const section = screen.getByText(label).closest("section")!;
+      fireEvent.click(within(section).getByRole("button", { name: /Use Demo Data/i }));
+    }
+    fireEvent.click(screen.getByRole("button", { name: /Preview prompts/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Generate 2 artifacts/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("1 artifact was generated before an error: Generator unavailable");
+    expect(api.mock.calls.filter(([path, , init]) => path === "/api/v1/projects/p1/generate" && init?.method === "POST")).toHaveLength(2);
   });
 
   it("keeps the artifact dialog closable after exporting controls are available", async () => {

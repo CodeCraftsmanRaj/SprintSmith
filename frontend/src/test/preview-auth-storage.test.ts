@@ -93,4 +93,30 @@ describe("brokered preview auth storage", () => {
     Object.defineProperty(window, "parent", { configurable: true, value: { postMessage: vi.fn() } });
     expect(brokeredPreviewStorage()).toBe(localStorage);
   });
+
+  it("retries a silent editor request once and falls back to local auth storage", async () => {
+    vi.useFakeTimers();
+    try {
+      const { storage, postMessage } = createPreviewStorage();
+      localStorage.setItem("cached-session", "local-session");
+      const reading = storage.getItem("cached-session");
+      await vi.advanceTimersByTimeAsync(4_250);
+      await expect(reading).resolves.toBe("local-session");
+      expect(postMessage).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects malformed broker replies and preserves local data on a negative response", async () => {
+    const { storage, postMessage } = createPreviewStorage();
+    localStorage.setItem("session", "existing-session");
+    const reading = storage.getItem("session");
+    const [{ requestId }] = postMessage.mock.calls[0] as [{ requestId: string }];
+    for (const data of [null, { type: "other", requestId, ok: true, value: "spoof" }, { type: "lovable-preview-auth:result", requestId: "wrong-id", ok: true, value: "spoof" }]) {
+      window.dispatchEvent(new MessageEvent("message", { origin: EDITOR_ORIGIN, data }));
+    }
+    window.dispatchEvent(new MessageEvent("message", { origin: EDITOR_ORIGIN, data: { type: "lovable-preview-auth:result", requestId, ok: false, value: 42 } }));
+    await expect(reading).resolves.toBe("existing-session");
+  });
 });

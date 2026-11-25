@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { Command, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -17,19 +17,15 @@ import { NavigationMenu, NavigationMenuItem, NavigationMenuLink, NavigationMenuL
 import { Drawer, DrawerContent, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar, SidebarContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { ChartContainer, ChartLegendContent, ChartTooltipContent } from "@/components/ui/chart";
+import { ChartContainer, ChartLegendContent, ChartStyle, ChartTooltipContent } from "@/components/ui/chart";
 import { Bar, BarChart, XAxis } from "recharts";
 
+const carouselApi = vi.hoisted(() => ({
+  canScrollPrev: vi.fn(() => true), canScrollNext: vi.fn(() => true),
+  on: vi.fn(), off: vi.fn(), scrollPrev: vi.fn(), scrollNext: vi.fn(),
+}));
 vi.mock("embla-carousel-react", () => {
-  const api = {
-    canScrollPrev: () => true,
-    canScrollNext: () => true,
-    on: vi.fn(),
-    off: vi.fn(),
-    scrollPrev: vi.fn(),
-    scrollNext: vi.fn(),
-  };
-  return { default: () => [() => null, api] };
+  return { default: () => [() => null, carouselApi] };
 });
 vi.mock("react-resizable-panels", () => ({
   Group: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
@@ -134,15 +130,75 @@ describe("uncovered UI wrappers", () => {
     expect(screen.getByText("12")).toBeInTheDocument();
   });
 
-  it("renders carousel controls and resizable panels", () => {
-    render(<>
-      <Carousel><CarouselContent><CarouselItem>Slide one</CarouselItem></CarouselContent><CarouselPrevious /><CarouselNext /></Carousel>
+  it("covers chart labels, configured icons, formatters, hidden indicators, and theme colors", () => {
+    const chartWarning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const ChartIcon = () => <svg data-testid="configured-chart-icon" />;
+    const payload = [
+      { dataKey: "amount", name: "primary", value: 14, color: "#246", type: "bar", payload: { series: "primary", fill: "#369" } },
+      { dataKey: "ignored", name: "ignored", value: 5, color: "#999", type: "none", payload: {} },
+    ] as never;
+    render(<ChartContainer config={{ primary: { label: "Primary amount", icon: ChartIcon, theme: { light: "#fff", dark: "#000" } }, amount: { label: "Amount", color: "#246" } }}>
+      <>
+        <ChartTooltipContent active label="amount" labelClassName="tooltip-label" payload={payload} indicator="line" />
+        <ChartTooltipContent active label="Custom" labelKey="series" nameKey="series" hideIndicator hideLabel payload={[{ dataKey: "amount", name: "amount", value: 0, color: "#369", type: "bar", payload: { series: "primary", fill: "#369" } } as never]} />
+        <ChartTooltipContent active label="amount" payload={[{ dataKey: "amount", name: "amount", value: 14, color: "#246", type: "bar", payload: {} } as never]} formatter={() => <b>Formatted metric</b>} indicator="dashed" />
+        <ChartTooltipContent active label="amount" payload={[{ dataKey: "amount", name: "amount", value: 14, color: "#246", type: "bar", payload: { fill: "#246" } } as never]} labelFormatter={(value) => `Period ${String(value)}`} />
+        <ChartTooltipContent active payload={[]} />
+        <ChartLegendContent verticalAlign="top" hideIcon payload={[{ dataKey: "amount", value: "amount", color: "#246", type: "square" }, { dataKey: "ignored", value: "ignored", color: "#999", type: "none" }] as never} />
+        <ChartLegendContent payload={[{ dataKey: "primary", value: "primary", color: "#369", type: "square" }] as never} />
+        <ChartLegendContent payload={[]} />
+      </>
+    </ChartContainer>);
+    expect(screen.getAllByText("Primary amount").length).toBeGreaterThan(0);
+    expect(screen.getByText("Formatted metric")).toBeInTheDocument();
+    expect(screen.getByText("Period Amount")).toBeInTheDocument();
+    expect(screen.getAllByTestId("configured-chart-icon").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Amount").length).toBeGreaterThan(0);
+    chartWarning.mockRestore();
+  });
+
+  it("handles charts with no configured colors and sparse Recharts payloads", () => {
+    render(<ChartContainer config={{ unstyled: { label: "Unstyled" } }}>
+      <>
+        <ChartStyle id="plain-chart" config={{ unstyled: { label: "Unstyled" } }} />
+        <ChartTooltipContent active={false} payload={[{ dataKey: "value", name: "value", value: 1, color: "#123", type: "bar", payload: {} } as never]} />
+        <ChartTooltipContent active label={null} payload={[{ value: 0, color: "#123", type: "bar", payload: {} } as never]} />
+        <ChartTooltipContent active label="series" labelKey="series" payload={[{ dataKey: "value", name: "value", value: 3, color: "#123", type: "bar", payload: { series: "unstyled" } } as never]} />
+        <ChartLegendContent payload={[{ dataKey: "hidden", value: "hidden", color: "#123", type: "none" }] as never} />
+      </>
+    </ChartContainer>);
+    expect(screen.getByText("Unstyled")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.queryByText("hidden")).not.toBeInTheDocument();
+    expect(document.querySelector("style")?.textContent).not.toContain("--color-unstyled");
+  });
+
+  it("renders carousel controls, responds to keyboard and buttons, and releases listeners", () => {
+    const setApi = vi.fn();
+    const view = render(<>
+      <Carousel setApi={setApi} opts={{ loop: true }}><CarouselContent><CarouselItem>Slide one</CarouselItem></CarouselContent><CarouselPrevious /><CarouselNext /></Carousel>
+      <Carousel orientation="vertical"><CarouselContent><CarouselItem>Vertical slide</CarouselItem></CarouselContent></Carousel>
       <ResizablePanelGroup direction="horizontal"><ResizablePanel defaultSize={50}>Left panel</ResizablePanel><ResizableHandle withHandle /><ResizablePanel defaultSize={50}>Right panel</ResizablePanel></ResizablePanelGroup>
     </>);
-    expect(screen.getByRole("region")).toHaveAttribute("aria-roledescription", "carousel");
+    const regions = screen.getAllByRole("region");
+    expect(regions[0]).toHaveAttribute("aria-roledescription", "carousel");
+    expect(regions[1]).toHaveAttribute("aria-roledescription", "carousel");
     expect(screen.getByText("Slide one")).toBeInTheDocument();
+    expect(screen.getByText("Vertical slide")).toHaveClass("pt-4");
     expect(screen.getByText("Left panel")).toBeInTheDocument();
     expect(screen.getByText("Right panel")).toBeInTheDocument();
+    expect(setApi).toHaveBeenCalledWith(carouselApi);
+    expect(screen.getByRole("button", { name: "Previous slide" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Next slide" })).toBeEnabled();
+    fireEvent.keyDown(regions[0]!, { key: "ArrowLeft" });
+    fireEvent.keyDown(regions[0]!, { key: "ArrowRight" });
+    fireEvent.keyDown(regions[0]!, { key: "Home" });
+    fireEvent.click(screen.getByRole("button", { name: "Previous slide" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next slide" }));
+    expect(carouselApi.scrollPrev).toHaveBeenCalledTimes(2);
+    expect(carouselApi.scrollNext).toHaveBeenCalledTimes(2);
+    view.unmount();
+    expect(carouselApi.off).toHaveBeenCalledWith("select", expect.any(Function));
   });
 
   it("renders form field labels, descriptions, and context menu actions", () => {
