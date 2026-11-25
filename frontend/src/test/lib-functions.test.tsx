@@ -156,7 +156,83 @@ describe("reportLovableError", () => {
     } as any);
 
     reportLovableError(new Error("test error"), { key: "value" });
-    expect(captureException).toHaveBeenCalled();
+    expect(captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "test error" }),
+      { source: "react_error_boundary", route: "/test", key: "value" },
+      { mechanism: "react_error_boundary", handled: false, severity: "error" },
+    );
+  });
+
+  it("lets caller context override default telemetry context and forwards errors to the preview hook", () => {
+    const captureException = vi.fn();
+    const reportRuntimeError = vi.fn();
+    vi.stubGlobal("window", {
+      __lovableEvents: { captureException },
+      __lovableReportRuntimeError: reportRuntimeError,
+      location: { pathname: "/test" },
+    } as any);
+    const error = new Error("boundary failure");
+
+    reportLovableError(error, { route: "/custom" });
+
+    expect(captureException).toHaveBeenCalledWith(
+      error,
+      { source: "react_error_boundary", route: "/custom" },
+      { mechanism: "react_error_boundary", handled: false, severity: "error" },
+    );
+    expect(reportRuntimeError).toHaveBeenCalledWith({
+      message: "boundary failure",
+      stack: error.stack,
+      filename: "/test",
+    });
+  });
+
+  it("describes responses and plain objects when forwarding runtime errors", () => {
+    const reportRuntimeError = vi.fn();
+    vi.stubGlobal("window", {
+      __lovableEvents: undefined,
+      __lovableReportRuntimeError: reportRuntimeError,
+      location: { pathname: "/reports" },
+    } as any);
+    const response = new Response(null, { status: 404 });
+    Object.defineProperty(response, "url", { value: "https://example.test/missing" });
+
+    reportLovableError(response);
+    reportLovableError({ message: "database unavailable", code: "DB_DOWN" });
+    reportLovableError("plain string failure");
+
+    expect(reportRuntimeError.mock.calls.map(([payload]) => payload.message)).toEqual([
+      "Response 404 at https://example.test/missing",
+      "database unavailable",
+      "plain string failure",
+    ]);
+    expect(reportRuntimeError.mock.calls[0][0]).toMatchObject({ filename: "/reports" });
+  });
+
+  it("falls back to string conversion for circular thrown objects and omits missing hooks", () => {
+    const circular: { self?: unknown } = {};
+    circular.self = circular;
+    const reportRuntimeError = vi.fn();
+    vi.stubGlobal("window", {
+      __lovableEvents: {},
+      __lovableReportRuntimeError: reportRuntimeError,
+      location: { pathname: "/test" },
+    } as any);
+
+    expect(() => reportLovableError(circular)).not.toThrow();
+    expect(reportRuntimeError).toHaveBeenCalledWith({
+      message: "[object Object]",
+      filename: "/test",
+    });
+
+    vi.stubGlobal("window", {
+      __lovableEvents: {},
+      __lovableReportRuntimeError: undefined,
+      location: { pathname: "/test" },
+    } as any);
+    expect(() => reportLovableError("no reporting hook")).not.toThrow();
+    vi.stubGlobal("window", undefined);
+    expect(() => reportLovableError(new Error("server-side error"))).not.toThrow();
   });
 });
 
