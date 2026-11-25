@@ -24,6 +24,10 @@ services:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       DEFAULT_LLM: ${DEFAULT_LLM:-groq-openai/gpt-oss-120b}
       FALLBACK_LLM: ${FALLBACK_LLM:-gemini-3.6-flash}
+      LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-false}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
       RETRIEVAL_MODE: ${RETRIEVAL_MODE:-hybrid}
       AI_ENGINE_PORT: "8001"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -47,6 +51,10 @@ services:
       AI_ENGINE_URL: http://ai-engine:8001
       GRAFANA_ROOT_URL: ${GRAFANA_ROOT_URL:-https://sprintsmith-api.rajmathuria.me/grafana/}
       GRAFANA_DASHBOARD_UID: ${GRAFANA_DASHBOARD_UID:-sprintsmith-api}
+      LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-false}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
       UPLOAD_DIR: /shared/uploads
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
       AUTO_CREATE_TABLES: "false"
