@@ -33,20 +33,26 @@ if [[ "${SKIP_BUILD:-false}" != "true" ]]; then
 	ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
 	echo "Submitting Cloud Build as: ${ACTIVE_ACCOUNT:-unknown}"
 	echo "Cloud Build source staging bucket: ${STAGING_BUCKET}"
-	BILLING_ACCOUNT="$(gcloud billing projects describe "$PROJECT_ID" --format='value(billingAccountName)' 2>/dev/null || true)"
-	if [[ -z "$BILLING_ACCOUNT" ]]; then
+	if BILLING_INFO="$(gcloud billing projects describe "$PROJECT_ID" --format='value(billingAccountName,billingEnabled)' 2>&1)"; then
+		read -r BILLING_ACCOUNT BILLING_ENABLED <<<"$BILLING_INFO"
+	else
+		BILLING_ACCOUNT=""
+		BILLING_ENABLED=""
+		echo "Could not verify project billing status; continuing to Cloud Build." >&2
+		echo "$BILLING_INFO" >&2
+	fi
+	if [[ "$BILLING_ENABLED" == "False" || ( -n "$BILLING_ENABLED" && ( -z "$BILLING_ACCOUNT" || "$BILLING_ACCOUNT" == "(unset)" ) ) ]]; then
 		cat >&2 <<EOF
 
-Cloud Build cannot start because project ${PROJECT_ID} has no active billing account.
-The GCP billing account is disabled, delinquent, or not linked to the project.
+Cloud Build cannot start because project ${PROJECT_ID} has no active linked billing account.
+Google Cloud reports billingEnabled=${BILLING_ENABLED} and billingAccountName=${BILLING_ACCOUNT:-none}.
 
 A billing administrator must restore billing for ${PROJECT_ID} in the Google Cloud
 Console before rerunning this workflow:
 
   https://console.cloud.google.com/billing/linkedaccount?project=${PROJECT_ID}
 
-The IAM service account and staging bucket permissions cannot override a disabled
-or delinquent billing account.
+The IAM service account and staging bucket permissions cannot override disabled billing.
 EOF
 		exit 1
 	fi
