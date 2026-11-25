@@ -29,7 +29,22 @@ async function getProjectMonitoringDashboard(projectId: string, authToken: strin
 
 const emptyRunMetrics: WorkflowRunMetrics = { run_count: 0, status_counts: {}, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, total_latency_ms: 0, average_latency_ms: 0, estimated_cost_usd: null, prompt_variant_metrics: [] };
 async function getWorkflowRunMetrics(projectId: string, authToken: string): Promise<WorkflowRunMetrics> {
-  try { return await api<WorkflowRunMetrics>(`/api/v1/projects/${projectId}/runs/metrics`, authToken); }
+  try {
+    const metrics = await api<Partial<WorkflowRunMetrics>>(`/api/v1/projects/${projectId}/runs/metrics`, authToken);
+    return {
+      ...emptyRunMetrics,
+      ...metrics,
+      run_count: metrics.run_count ?? 0,
+      status_counts: metrics.status_counts ?? {},
+      prompt_tokens: metrics.prompt_tokens ?? 0,
+      completion_tokens: metrics.completion_tokens ?? 0,
+      total_tokens: metrics.total_tokens ?? 0,
+      total_latency_ms: metrics.total_latency_ms ?? 0,
+      average_latency_ms: metrics.average_latency_ms ?? 0,
+      estimated_cost_usd: metrics.estimated_cost_usd ?? null,
+      prompt_variant_metrics: metrics.prompt_variant_metrics ?? [],
+    };
+  }
   catch { return emptyRunMetrics; }
 }
 
