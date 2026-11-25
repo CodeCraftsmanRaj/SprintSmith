@@ -17,6 +17,7 @@ from app.domain.schemas import (ArtifactOut, ArtifactUpdate, EvaluationBaselineC
 from app.services.ai_engine import AIEngineClient
 from app.services.artifact_export import render_artifact_export
 from app.services.artifact_service import ArtifactService
+from app.services.openapi_spec import OpenAPIValidationError, to_openapi_spec
 
 router = APIRouter(tags=["Artifacts"])
 
@@ -260,6 +261,36 @@ def export_artifact(
             detail="Gherkin export is only supported for acceptance_criteria artifacts",
         )
     return response
+
+
+@router.get("/artifacts/{artifact_id}/openapi")
+def export_openapi_artifact(
+    artifact_id: str,
+    format: str = Query("json", pattern="^(json|yaml)$"),
+    artifact_service: ArtifactService = Depends(get_artifact_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        artifact = artifact_service.get(artifact_id, user)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    if artifact.artifact_type != "api_spec":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="OpenAPI export is only supported for api_spec artifacts")
+    try:
+        spec = to_openapi_spec(artifact.content or {}, title=artifact.title)
+    except OpenAPIValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"Stored API specification is invalid: {e}") from e
+    if format == "yaml":
+        import yaml
+        return Response(content=yaml.safe_dump(spec, sort_keys=False), media_type="application/yaml",
+                        headers={"Content-Disposition": f'attachment; filename="{artifact.id}-openapi.yaml"'})
+    return Response(content=json.dumps(spec, ensure_ascii=False, indent=2),
+                    media_type="application/vnd.oai.openapi+json",
+                    headers={"Content-Disposition": f'attachment; filename="{artifact.id}-openapi.json"'})
 
 
 @router.post("/artifacts/{artifact_id}/export/backlog")

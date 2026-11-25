@@ -15,6 +15,7 @@ from app.domain.models import (Artifact, ArtifactStatusHistory, BaselineComparis
 from app.repositories.artifact_repo import ArtifactRepository
 from app.repositories.audit_repo import AuditRepository
 from app.services.ai_engine import AIEngineClient
+from app.services.openapi_spec import OpenAPIValidationError, to_openapi_spec
 from app.services.project_service import ProjectService
 
 
@@ -57,6 +58,11 @@ class ArtifactService:
                 "AI engine returned an invalid artifact payload. Please try generating again."
             )
         content = result["output"]
+        if artifact_type == "api_spec":
+            try:
+                content = to_openapi_spec(content, title=f"{project_id} API")
+            except OpenAPIValidationError as exc:
+                raise ValidationError(f"AI engine returned an invalid OpenAPI specification: {exc}") from exc
 
         artifact = Artifact(
             id=self.artifact_repo.new_id(),
