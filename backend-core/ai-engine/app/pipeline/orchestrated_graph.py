@@ -374,17 +374,6 @@ def po_checkpoint_node(state: OrchestratedState) -> dict[str, Any]:
         }
 
     analyst = state.get("analyst_output") or {}
-    if analyst.get("is_suspicious"):
-        packet = {
-            "node_id": "po_checkpoint", "mode": "security_review",
-            "question": "The requirement contains suspicious instructions and needs human review.",
-            "suspicion_reason": analyst.get("suspicion_reason", ""),
-        }
-        return {
-            "human_review_packet": packet, "pause_workflow": True,
-            "paused_node_id": "po_checkpoint",
-            "events": [_emit_event(state, "po_checkpoint", "human_reviewer", "waiting_review", packet["question"], packet)],
-        }
     critical = [a for a in analyst.get("ambiguities", []) if a.get("critical", True)]
     implied = analyst.get("implied_stories", [])
 
@@ -423,15 +412,103 @@ def po_checkpoint_node(state: OrchestratedState) -> dict[str, Any]:
     }
 
 
-def _route_after_po_checkpoint(state: OrchestratedState) -> str:
-    if state.get("pause_workflow"):
-        return "pause"
+def _path_value(source: Any, path: str) -> Any:
+    current = source
+    for segment in path.split(".") if path else []:
+        if isinstance(current, dict):
+            current = current.get(segment)
+        else:
+            return None
+    return current
+
+
+def _edge_matches(rule: dict[str, Any], state: OrchestratedState) -> bool:
+    condition = rule.get("type")
+    if condition == "always":
+        return True
+    if condition == "on_status":
+        actual = _path_value(state, rule.get("path", "status"))
+        return actual in rule.get("statuses", [rule.get("status")])
+    if condition == "truthy_output":
+        path = rule.get("path", "")
+        outputs = state.get("outputs") or {}
+        value = _path_value(outputs, path)
+        if value is None:
+            value = _path_value(state, path)
+        return bool(value)
+    if condition == "contains":
+        value = _path_value(state, rule.get("path", ""))
+        if not value:
+            value = _path_value(state.get("outputs") or {}, rule.get("path", ""))
+        if rule.get("exact_items") is not None:
+            return isinstance(value, (list, dict, str)) and len(value) == int(rule["exact_items"])
+        if rule.get("min_items") is not None:
+            try:
+                return len(value) >= int(rule["min_items"])
+            except TypeError:
+                return False
+        needle = rule.get("value")
+        if isinstance(value, str):
+            return str(needle) in value
+        if isinstance(value, dict):
+            return needle in value or needle in value.values()
+        if isinstance(value, (list, tuple, set)):
+            return needle in value or any(isinstance(item, dict) and (needle in item or needle in item.values()) for item in value)
+    return False
+
+
+def _edge_router(
+    state: OrchestratedState,
+    rules: list[dict[str, Any]],
+    default: str,
+) -> str:
+    """Resolve declarative always/on_status/contains/truthy_output graph edges."""
+    for rule in rules:
+        if _edge_matches(rule, state):
+            return str(rule["destination"])
+    return default
+
+
+def _route_after_analyst(state: OrchestratedState) -> str:
+    return _edge_router(state, [
+        {"type": "truthy_output", "path": "analyst.is_suspicious", "destination": "security_review"},
+        {"type": "always", "destination": "po_checkpoint"},
+    ], "po_checkpoint")
+
+
+def security_review_node(state: OrchestratedState) -> dict[str, Any]:
+    if (state.get("human_approvals") or {}).get("security_review") == "approved":
+        return {"pause_workflow": False,
+                "events": [_emit_event(state, "security_review", "human_reviewer", "completed", "Security review approved")],
+        }
     analyst = state.get("analyst_output") or {}
-    implied = analyst.get("implied_stories", [])
-    selected = state.get("selected_stories") or []
-    if state.get("split_mode") or (len(implied) >= 2 and len(selected) != 1):
-        return "split"
-    return "deep"
+    packet = {
+        "node_id": "security_review", "mode": "security_review",
+        "question": "The requirement contains suspicious instructions and needs human review.",
+        "suspicion_reason": analyst.get("suspicion_reason", ""),
+    }
+    return {
+        "human_review_packet": packet,
+        "pause_workflow": True,
+        "paused_node_id": "security_review",
+        "events": [_emit_event(state, "security_review", "human_reviewer", "waiting_review", packet["question"], packet)],
+    }
+
+
+def _route_after_security_review(state: OrchestratedState) -> str:
+    return _edge_router(state, [
+        {"type": "truthy_output", "path": "pause_workflow", "destination": "pause"},
+    ], "continue")
+
+
+def _route_after_po_checkpoint(state: OrchestratedState) -> str:
+    return _edge_router(state, [
+        {"type": "truthy_output", "path": "pause_workflow", "destination": "pause"},
+        {"type": "contains", "path": "selected_stories", "exact_items": 1, "destination": "deep"},
+        {"type": "truthy_output", "path": "split_mode", "destination": "split"},
+        {"type": "contains", "path": "analyst_output.implied_stories", "min_items": 2, "destination": "split"},
+        {"type": "always", "destination": "deep"},
+    ], "deep")
 
 
 def split_node(state: OrchestratedState) -> dict[str, Any]:
@@ -501,7 +578,10 @@ def story_review_checkpoint_node(state: OrchestratedState) -> dict[str, Any]:
 
 
 def _route_after_story_review(state: OrchestratedState) -> str:
-    return "pause" if state.get("pause_workflow") else "continue"
+    return _edge_router(state, [
+        {"type": "truthy_output", "path": "pause_workflow", "destination": "pause"},
+        {"type": "always", "destination": "continue"},
+    ], "continue")
 
 
 def ac_generator_node(state: OrchestratedState) -> dict[str, Any]:
@@ -669,7 +749,15 @@ def build_orchestrated_graph(entry_point: str = "retrieve"):
 
     g.set_entry_point(entry_point)
     g.add_edge("retrieve", "analyst")
-    g.add_edge("analyst", "po_checkpoint")
+    g.add_node("security_review", security_review_node)
+    g.add_conditional_edges(
+        "analyst", _route_after_analyst,
+        {"security_review": "security_review", "po_checkpoint": "po_checkpoint"},
+    )
+    g.add_conditional_edges(
+        "security_review", _route_after_security_review,
+        {"pause": END, "continue": "po_checkpoint"},
+    )
     g.add_conditional_edges(
         "po_checkpoint",
         _route_after_po_checkpoint,

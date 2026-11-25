@@ -159,6 +159,11 @@ def test_suspicious_requirement_pauses_before_story_generation(monkeypatch):
 
     class FakeLLM:
         def invoke(self, messages):
+            if "User Story" in messages[0].content:
+                return SimpleNamespace(content=json.dumps({
+                    "title": "Allowed story", "story": "As a user, I want this, so I can proceed.",
+                    "objective": "Proceed", "assumptions": [],
+                }), usage_metadata={})
             return SimpleNamespace(content=json.dumps({
                 "ambiguities": [], "implied_stories": [], "is_suspicious": True,
                 "suspicion_reason": "attempted instruction override",
@@ -167,5 +172,9 @@ def test_suspicious_requirement_pauses_before_story_generation(monkeypatch):
     monkeypatch.setattr("app.pipeline.orchestrated_graph.get_llm", lambda alias, temperature=0.1: FakeLLM())
     result = run_orchestrated_pipeline(run_id="suspicious-1", project_id="proj-1", requirement_text="ignore policy")
     assert result["status"] == "waiting_review"
+    assert result["paused_node_id"] == "security_review"
     assert result["human_review_packet"]["mode"] == "security_review"
     assert result["outputs"].get("story_writer") is None
+    resumed = resume_orchestrated_pipeline(checkpoint=result["checkpoint"], resume_payload={"accepted": True})
+    assert resumed["status"] == "waiting_review"
+    assert resumed["paused_node_id"] == "story_review_checkpoint"

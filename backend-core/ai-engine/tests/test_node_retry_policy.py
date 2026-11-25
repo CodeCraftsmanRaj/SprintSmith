@@ -1,7 +1,7 @@
 import pytest
 
 from app.pipeline.llm_errors import LLMNodeFailure
-from app.pipeline.orchestrated_graph import _with_node_policy
+from app.pipeline.orchestrated_graph import _edge_router, _with_node_policy
 
 
 def test_node_policy_retries_before_returning_success():
@@ -44,3 +44,16 @@ def test_node_policy_halt_raises_structured_failure():
         })
     assert exc.value.detail["agent"] == "analyst"
     assert exc.value.detail["retries_attempted"] == 1
+
+
+def test_declarative_router_supports_all_condition_types():
+    state = {
+        "status": "waiting_review",
+        "outputs": {"analyst": {"is_suspicious": True}},
+        "analyst_output": {"implied_stories": [{"title": "A"}, {"title": "B"}]},
+        "selected_stories": [],
+    }
+    assert _edge_router(state, [{"type": "on_status", "status": "waiting_review", "destination": "pause"}], "next") == "pause"
+    assert _edge_router(state, [{"type": "truthy_output", "path": "analyst.is_suspicious", "destination": "security"}], "next") == "security"
+    assert _edge_router(state, [{"type": "contains", "path": "analyst_output.implied_stories", "min_items": 2, "destination": "split"}], "next") == "split"
+    assert _edge_router(state, [{"type": "always", "destination": "next"}], "fallback") == "next"
