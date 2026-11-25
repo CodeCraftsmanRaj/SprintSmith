@@ -122,9 +122,14 @@ async def generate_stream(req: GenerateRequest):
             project_id=req.project_id, artifact_type=req.artifact_type, request_id=request_id,
         )
         try:
-            async for update in sop_graph.SOP_GRAPH.astream(
-                accumulated, config=langfuse_config, stream_mode="updates",
-            ):
+            stream = (
+                sop_graph.SOP_GRAPH.astream(
+                    accumulated, config=langfuse_config, stream_mode="updates",
+                )
+                if langfuse_config
+                else sop_graph.SOP_GRAPH.astream(accumulated, stream_mode="updates")
+            )
+            async for update in stream:
                 for node, delta in update.items():
                     if isinstance(delta, dict):
                         accumulated.update(delta)
