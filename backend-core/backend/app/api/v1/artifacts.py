@@ -69,11 +69,17 @@ async def generate(
 @router.get("/projects/{project_id}/artifacts", response_model=list[ArtifactOut])
 def list_artifacts(
     project_id: str,
+    status_filter: str | None = Query(default=None, alias="status", pattern="^(backlog|todo|in_progress|in_review|blocked|done)$"),
+    priority: str | None = Query(default=None, pattern="^(low|medium|high|critical)$"),
+    category: str | None = Query(default=None, max_length=100),
+    assigned_to: str | None = Query(default=None, max_length=36),
     artifact_service: ArtifactService = Depends(get_artifact_service),
     user: User = Depends(get_current_user),
 ):
     try:
-        return artifact_service.list_for_project(project_id, user)
+        return artifact_service.list_for_project(project_id, user, status=status_filter,
+                                                 priority=priority, category=category,
+                                                 assigned_to=assigned_to)
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthorisationError as e:
@@ -104,6 +110,22 @@ def update_artifact(
     try:
         updates = payload.model_dump(exclude_unset=True)
         return artifact_service.update(artifact_id, updates, user)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get("/artifacts/{artifact_id}/status-history")
+def artifact_status_history(
+    artifact_id: str,
+    artifact_service: ArtifactService = Depends(get_artifact_service),
+    user: User = Depends(get_current_user),
+):
+    try:
+        return artifact_service.list_status_history(artifact_id, user)
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthorisationError as e:

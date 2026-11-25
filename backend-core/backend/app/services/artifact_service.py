@@ -8,7 +8,7 @@ import uuid
 from sqlalchemy import select
 
 from app.core.exceptions import ResourceNotFoundError, ValidationError
-from app.domain.models import Artifact, Evaluation, GenerationHistory, User
+from app.domain.models import Artifact, ArtifactStatusHistory, Evaluation, GenerationHistory, User
 from app.repositories.artifact_repo import ArtifactRepository
 from app.repositories.audit_repo import AuditRepository
 from app.services.ai_engine import AIEngineClient
@@ -101,9 +101,12 @@ class ArtifactService:
 
     # ── Read / List ─────────────────────────────────────────────────────
 
-    def list_for_project(self, project_id: str, user: User) -> list[Artifact]:
+    def list_for_project(self, project_id: str, user: User, *, status: str | None = None,
+                         priority: str | None = None, category: str | None = None,
+                         assigned_to: str | None = None) -> list[Artifact]:
         self.project_service.get_project_or_fail(project_id, user)
-        return self.artifact_repo.list_for_project(project_id)
+        return self.artifact_repo.list_for_project(project_id, status=status, priority=priority,
+                                                   category=category, assigned_to=assigned_to)
 
     def get(self, artifact_id: str, user: User) -> Artifact:
         artifact = self._get_artifact_or_fail(artifact_id)
@@ -116,10 +119,44 @@ class ArtifactService:
         artifact = self._get_artifact_or_fail(artifact_id)
         self.project_service.get_project_or_fail(artifact.project_id, user, write=True)
 
+        if "assigned_to" in updates and updates["assigned_to"] is not None:
+            assignee = self.artifact_repo.db.get(User, updates["assigned_to"])
+            if not assignee or not assignee.is_active:
+                raise ValidationError("Assigned user does not exist or is disabled")
+            self.project_service.get_project_or_fail(artifact.project_id, assignee)
+        if "parent_artifact_ids" in updates:
+            parent_ids = updates["parent_artifact_ids"] or []
+            if artifact.id in parent_ids:
+                raise ValidationError("An artifact cannot depend on itself")
+            parents = self.artifact_repo.db.scalars(select(Artifact).where(
+                Artifact.project_id == artifact.project_id, Artifact.id.in_(parent_ids)
+            )).all() if parent_ids else []
+            if len(parents) != len(set(parent_ids)):
+                raise ValidationError("Dependencies must reference artifacts in the same project")
+            existing = {row.id: set(row.parent_artifact_ids or []) for row in
+                        self.artifact_repo.db.scalars(select(Artifact).where(
+                            Artifact.project_id == artifact.project_id)).all()}
+            existing[artifact.id] = set(parent_ids)
+            def reaches(start: str, target: str, visited: set[str]) -> bool:
+                if start == target:
+                    return True
+                if start in visited:
+                    return False
+                visited.add(start)
+                return any(reaches(child, target, visited) for child in existing.get(start, set()))
+            if any(reaches(parent_id, artifact.id, set()) for parent_id in parent_ids):
+                raise ValidationError("Artifact dependencies cannot contain a cycle")
+
+        previous_status = artifact.status
         for key, value in updates.items():
-            if value is not None:
+            if value is not None or key in {"assigned_to", "category"}:
                 setattr(artifact, key, value)
         artifact.version += 1
+        if "status" in updates and updates["status"] != previous_status:
+            self.artifact_repo.db.add(ArtifactStatusHistory(
+                id=self.artifact_repo.new_id(), artifact_id=artifact.id, changed_by=user.id,
+                previous_status=previous_status, status=updates["status"],
+            ))
 
         # Any artifact that explicitly depends on this artifact is now stale.
         db = self.artifact_repo.db
@@ -133,6 +170,15 @@ class ArtifactService:
         )
         self.artifact_repo.commit()
         return self.artifact_repo.refresh(artifact)
+
+    def list_status_history(self, artifact_id: str, user: User) -> list[dict]:
+        artifact = self.get(artifact_id, user)
+        rows = self.artifact_repo.db.scalars(select(ArtifactStatusHistory).where(
+            ArtifactStatusHistory.artifact_id == artifact.id
+        ).order_by(ArtifactStatusHistory.created_at.desc())).all()
+        return [{"id": row.id, "changed_by": row.changed_by,
+                 "previous_status": row.previous_status, "status": row.status,
+                 "created_at": row.created_at} for row in rows]
 
     # ── History ─────────────────────────────────────────────────────────
 

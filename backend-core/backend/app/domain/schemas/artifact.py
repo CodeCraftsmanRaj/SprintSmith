@@ -20,6 +20,12 @@ class GenerateRequest(BaseModel):
 class ArtifactUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=255)
     content: dict[str, Any] | None = None
+    status: str | None = Field(default=None, pattern="^(backlog|todo|in_progress|in_review|blocked|done)$")
+    priority: str | None = Field(default=None, pattern="^(low|medium|high|critical)$")
+    category: str | None = Field(default=None, max_length=100)
+    assigned_to: str | None = Field(default=None, max_length=36)
+    parent_artifact_ids: list[str] | None = Field(default=None, max_length=100)
+    sort_order: int | None = Field(default=None, ge=0)
 
 
 class ArtifactOut(BaseModel):
@@ -31,6 +37,12 @@ class ArtifactOut(BaseModel):
     artifact_type: str
     title: str
     content: dict[str, Any]
+    status: str = "backlog"
+    priority: str = "medium"
+    category: str | None = None
+    assigned_to: str | None = None
+    parent_artifact_ids: list[str] = Field(default_factory=list)
+    sort_order: int = 0
     version: int
     created_at: datetime
     updated_at: datetime

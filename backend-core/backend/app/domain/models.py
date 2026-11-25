@@ -161,10 +161,26 @@ class Artifact(Base):
     source_requirement_ids: Mapped[list] = mapped_column(JSON, default=list)
     generation_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     approval_status: Mapped[str] = mapped_column(String(32), default="approved")
+    status: Mapped[str] = mapped_column(String(32), default="backlog", index=True)
+    priority: Mapped[str] = mapped_column(String(20), default="medium", index=True)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    assigned_to: Mapped[str | None] = mapped_column(ForeignKey(USERS_ID_FK, ondelete="SET NULL"), nullable=True, index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
     is_stale: Mapped[bool] = mapped_column(Boolean, default=False)
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
+
+
+class ArtifactStatusHistory(Base):
+    __tablename__ = "artifact_status_history"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    artifact_id: Mapped[str] = mapped_column(ForeignKey(ARTIFACTS_ID_FK, ondelete="CASCADE"), index=True)
+    changed_by: Mapped[str] = mapped_column(ForeignKey(USERS_ID_FK))
+    previous_status: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, index=True)
 
 
 class GenerationHistory(Base):

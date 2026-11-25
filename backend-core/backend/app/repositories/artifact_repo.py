@@ -9,12 +9,19 @@ class ArtifactRepository(BaseRepository[Artifact]):
     def __init__(self, db: Session):
         super().__init__(db, Artifact)
 
-    def list_for_project(self, project_id: str) -> list[Artifact]:
-        stmt = (
-            select(Artifact)
-            .where(Artifact.project_id == project_id)
-            .order_by(Artifact.created_at.desc())
-        )
+    def list_for_project(self, project_id: str, *, status: str | None = None,
+                         priority: str | None = None, category: str | None = None,
+                         assigned_to: str | None = None) -> list[Artifact]:
+        stmt = select(Artifact).where(Artifact.project_id == project_id)
+        if status:
+            stmt = stmt.where(Artifact.status == status)
+        if priority:
+            stmt = stmt.where(Artifact.priority == priority)
+        if category:
+            stmt = stmt.where(Artifact.category == category)
+        if assigned_to:
+            stmt = stmt.where(Artifact.assigned_to == assigned_to)
+        stmt = stmt.order_by(Artifact.status, Artifact.sort_order, Artifact.created_at.desc())
         return list(self.db.scalars(stmt))
 
     def counts_by_type(self, project_id: str) -> dict[str, int]:
