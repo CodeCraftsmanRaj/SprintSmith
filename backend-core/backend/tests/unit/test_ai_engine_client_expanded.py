@@ -180,3 +180,62 @@ class TestAIEngineClientMethods:
             result = await client.evaluate_batch(project_id="proj-1", retrieval_mode="vector")
             assert result == {"status": "started"}
             client._request.assert_called_once_with("POST", "/evaluate/batch", params={"retrieval_mode": "vector", "project_id": "proj-1"})
+
+    @pytest.mark.asyncio
+    async def test_request_http_status_error_4xx(self):
+        from fastapi import HTTPException
+
+        client = AIEngineClient(base_url="http://engine:8001")
+        resp = MagicMock()
+        resp.status_code = 422
+        exc = httpx.HTTPStatusError("bad", request=MagicMock(), response=resp)
+
+        mock_client = MagicMock()
+        mock_client.request = AsyncMock(side_effect=exc)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.ai_engine.httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(HTTPException) as exc_info:
+                await client._request("POST", "/generate", json={})
+            assert exc_info.value.status_code == 502
+            assert "rejected the request" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_ingest_status_success_http_error_and_invalid_json(self):
+        from fastapi import HTTPException
+
+        client = AIEngineClient(base_url="http://engine:8001")
+
+        # 200 success
+        ok_resp = MagicMock()
+        ok_resp.status_code = 200
+        ok_resp.raise_for_status = MagicMock()
+        ok_resp.json.return_value = {"status": "completed"}
+
+        # 500 HTTPStatusError
+        err_resp = MagicMock()
+        err_resp.status_code = 500
+        err_resp.text = "boom"
+        http_exc = httpx.HTTPStatusError("err", request=MagicMock(), response=err_resp)
+
+        # Invalid JSON ValueError
+        bad_json_resp = MagicMock()
+        bad_json_resp.status_code = 200
+        bad_json_resp.raise_for_status = MagicMock()
+        bad_json_resp.json.side_effect = ValueError("not json")
+
+        mock_client = MagicMock()
+        mock_client.request = AsyncMock(side_effect=[ok_resp, http_exc, bad_json_resp])
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.ai_engine.httpx.AsyncClient", return_value=mock_client):
+            assert await client.ingest_status("job-ok") == {"status": "completed"}
+            with pytest.raises(HTTPException) as exc_http:
+                await client.ingest_status("job-err")
+            assert exc_http.value.status_code == 502
+            with pytest.raises(HTTPException) as exc_json:
+                await client.ingest_status("job-json")
+            assert exc_json.value.status_code == 502
+            assert "invalid response" in exc_json.value.detail
