@@ -50,6 +50,7 @@ The authenticated admin endpoint `GET /api/v1/observability/langfuse?days=7` rea
 - Generation: `POST /api/v1/projects/{id}/generate`, `POST /api/v1/projects/{id}/generate/stream` (SSE proxy of SOP node transitions), `POST /api/v1/projects/{id}/compare` (parallel DEFAULT/FALLBACK LLMs)
 - Artifacts: `GET /api/v1/projects/{id}/artifacts`, `GET/PATCH /api/v1/artifacts/{id}`, `GET /api/v1/artifacts/{id}/export?format=json|markdown|csv|yaml` (user_story CSV uses JIRA columns)
 - History, evaluations, traceability: `GET /api/v1/projects/{id}/history` (includes eval telemetry), `POST/GET /api/v1/artifacts/{id}/evaluations`, `GET /api/v1/projects/{id}/traceability` (React Flow nodes/edges)
+- Admin observability: `GET /api/v1/observability/langfuse?days=7` returns recent Langfuse observations when configured; set `LANGFUSE_ENABLED`, `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY`, and `LANGFUSE_SECRET_KEY` in the backend environment.
 - Admin-only: `GET /api/v1/audit-logs`, `POST /api/v1/evaluate/batch?retrieval_mode=vector|hybrid`
 - Admin-only prompt management: `GET/POST /api/v1/prompts/orchestration/...`, `GET/POST /api/v1/prompts/orchestration/{node_id}/versions`, `GET /api/v1/prompts/executions`, and `GET /api/v1/prompts/analytics`
 - `GET /health`, `GET /health/db`, `GET /health/ai`

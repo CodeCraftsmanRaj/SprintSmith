@@ -17,6 +17,7 @@ from app.api.v1.admin import router as admin_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.generate import router as generate_router
 from app.api.v1.health import router as health_router
+from app.api.v1.observability import router as observability_router
 from app.api.v1.projects import router as projects_router
 from app.api.v1.prompts import router as prompts_router
 from app.api.v1.requirements import router as requirements_router
@@ -66,6 +67,7 @@ app.include_router(generate_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(prompts_router, prefix="/api/v1")
 app.include_router(runs_router, prefix="/api/v1")
+app.include_router(observability_router, prefix="/api/v1")
 
 # Rate limiting (must be defined before middleware registration)
 _rate_windows: dict[tuple[str, str], deque[float]] = {}
