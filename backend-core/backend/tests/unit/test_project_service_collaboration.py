@@ -327,7 +327,7 @@ def test_member_role_update_and_removal_enforce_owner_and_admin_rules(
 
 
 def test_project_admin_can_manage_members_but_cannot_change_another_admin(
-    project_service, pm_user, dev_user, tester_user
+    project_service, pm_user, dev_user, tester_user, ba_user
 ):
     project = project_service.create("Team", "", pm_user)
     project_service.set_member(project.id, dev_user.email, "admin", pm_user)
@@ -336,10 +336,9 @@ def test_project_admin_can_manage_members_but_cannot_change_another_admin(
         project_service.set_member(project.id, "new@example.test", "admin", dev_user)
     with pytest.raises(AuthorisationError, match="change a project admin's role"):
         project_service.set_member(project.id, tester_user.email, "editor", dev_user)
-    project_service.set_member(project.id, "ba@example.com", "viewer", pm_user)
-    ba_id = project_service.user_repo.get_by_email("ba@example.com").id
+    project_service.set_member(project.id, ba_user.email, "viewer", pm_user)
     with pytest.raises(AuthorisationError, match="assign the Admin role"):
-        project_service.update_member_role(project.id, ba_id, "admin", dev_user)
+        project_service.update_member_role(project.id, ba_user.id, "admin", dev_user)
     with pytest.raises(ResourceNotFoundError, match="Project member"):
         project_service.update_member_role(project.id, "missing-member", "editor", pm_user)
 
