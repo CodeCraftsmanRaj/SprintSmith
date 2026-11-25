@@ -27,7 +27,6 @@ class TestConfiguration:
 
     def test_pytest_config(self):
         """Pytest should be available."""
-        import pytest
         assert pytest is not None
 
 

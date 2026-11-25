@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict
+
 
 class EvaluationBaselineCreate(BaseModel):
     model_config = ConfigDict(from_attributes=True)

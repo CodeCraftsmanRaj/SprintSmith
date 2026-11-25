@@ -1,8 +1,4 @@
 """Endpoint tests for SprintSmith backend - DB-independent."""
-import pytest
-from fastapi.testclient import TestClient
-from apps.api.app.main import app, JobResponse, DocumentResponse
-from uuid import UUID, uuid4
 
 
 class TestJobResponse:
@@ -10,6 +6,10 @@ class TestJobResponse:
 
     def test_job_response_creation(self):
         """JobResponse should be creatable."""
+        from uuid import uuid4
+
+        from app.main import JobResponse
+
         job = JobResponse(id=uuid4(), document_id=uuid4(), status="queued", attempts=0)
         assert str(job.id) is not None
         assert job.status == "queued"
@@ -21,7 +21,10 @@ class TestDocumentResponse:
 
     def test_document_response_creation(self):
         """DocumentResponse should be creatable."""
-        from apps.api.app.contracts import DocumentResponse
+        from uuid import uuid4
+
+        from app.contracts import DocumentResponse
+
         doc = DocumentResponse(
             id=uuid4(),
             tenant_id=uuid4(),
@@ -38,6 +41,9 @@ class TestHealth:
 
     def test_health_endpoint(self):
         """Health endpoint should work."""
+        from app.main import app
+        from fastapi.testclient import TestClient
+
         client = TestClient(app)
         response = client.get("/health")
         assert response.status_code == 200
@@ -48,6 +54,9 @@ class TestHealth:
 
     def test_health_returns_200(self):
         """Health endpoint should return 200."""
+        from app.main import app
+        from fastapi.testclient import TestClient
+
         client = TestClient(app)
         response = client.get("/health")
         assert response.status_code == 200
@@ -58,6 +67,9 @@ class TestReady:
 
     def test_ready_endpoint(self):
         """Ready endpoint should work."""
+        from app.main import app
+        from fastapi.testclient import TestClient
+
         client = TestClient(app)
         response = client.get("/ready")
         assert response is not None
@@ -68,6 +80,9 @@ class TestRoot:
 
     def test_root_endpoint(self):
         """Root endpoint should respond."""
+        from app.main import app
+        from fastapi.testclient import TestClient
+
         client = TestClient(app)
         response = client.get("/")
         assert response is not None
@@ -78,6 +93,9 @@ class TestMetrics:
 
     def test_metrics_endpoint(self):
         """Metrics endpoint should be defined."""
+        from app.main import app
+        from fastapi.testclient import TestClient
+
         client = TestClient(app)
         response = client.get("/metrics")
         assert response is not None
@@ -88,15 +106,21 @@ class TestAppInitialization:
 
     def test_app_is_fastapi(self):
         """App should be a FastAPI instance."""
+        from app.main import app
         from fastapi import FastAPI
+
         assert isinstance(app, FastAPI)
 
     def test_app_title(self):
         """App should have title."""
+        from app.main import app
+
         assert app.title == "SprintSmith API"
 
     def test_app_version(self):
         """App should have version."""
+        from app.main import app
+
         assert app.version is not None
 
 
@@ -105,7 +129,7 @@ class TestCounters:
 
     def test_counters_defined(self):
         """HTTP request counters should be defined."""
-        from apps.api.app.main import HTTP_REQUESTS, HTTP_LATENCY
+        from app.main import HTTP_LATENCY, HTTP_REQUESTS
         assert HTTP_REQUESTS is not None
         assert HTTP_LATENCY is not None
 
@@ -115,7 +139,7 @@ class TestLifespan:
 
     def test_lifespan_import(self):
         """Lifespan function should be importable."""
-        from apps.api.app.main import lifespan
+        from app.main import lifespan
         assert callable(lifespan)
 
 
@@ -124,7 +148,7 @@ class TestEndpointsExists:
 
     def test_search_request_model(self):
         """Search request model should be valid."""
-        from apps.api.app.contracts import SearchRequest
+        from app.contracts import SearchRequest
         request = SearchRequest(query="test query", top_k=5)
         assert request.query == "test query"
         assert request.top_k == 5
