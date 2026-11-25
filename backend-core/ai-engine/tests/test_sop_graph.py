@@ -24,6 +24,7 @@ from app.pipeline.sop_graph import (
     build_sop_graph,
     should_continue,
 )
+from app.pipeline import sop_graph
 
 
 def test_initial_state():
@@ -107,3 +108,81 @@ def test_build_sop_graph():
     """build_sop_graph returns a compiled graph."""
     graph = build_sop_graph()
     assert graph is not None
+
+
+def test_pm_node_passes_langfuse_config_to_generation_chain(monkeypatch):
+    config = {"callbacks": [object()]}
+    observed = {}
+
+    class FakeRaw:
+        content = '{"title": "draft"}'
+        usage_metadata = {"input_tokens": 3, "output_tokens": 4, "total_tokens": 7}
+
+    class FakeChain:
+        def invoke(self, inputs, config=None):
+            observed["inputs"] = inputs
+            observed["config"] = config
+            return FakeRaw()
+
+    monkeypatch.setattr(sop_graph, "build_generation_chain",
+                        lambda *args, **kwargs: (FakeChain(), None, "prompt-v1"))
+    state = _initial_state("user_story", "p1", "Write a story", "test-model")
+    state["context"] = "retrieved context"
+
+    result = sop_graph.pm_node(state, config=config)
+
+    assert observed["config"] is config
+    assert observed["inputs"]["context"] == "retrieved context"
+    assert result["draft_raw"] == '{"title": "draft"}'
+    assert result["usage"]["total_tokens"] == 7
+
+
+def test_judge_score_passes_langfuse_config(monkeypatch):
+    config = {"callbacks": [object()]}
+    observed = {}
+
+    class FakeLLM:
+        def invoke(self, prompt, config=None):
+            observed["prompt"] = prompt
+            observed["config"] = config
+            return type("Message", (), {"content": '{"score": 0.91, "reasoning": "complete"}'})()
+
+    monkeypatch.setattr(sop_graph, "get_llm", lambda *args, **kwargs: FakeLLM())
+
+    score, reason = sop_graph.judge_score("requirement", "artifact", config=config)
+
+    assert observed["config"] is config
+    assert "requirement" in observed["prompt"]
+    assert score == 0.91
+    assert reason == "complete"
+
+
+def test_run_sop_generation_attaches_config_and_flushes(monkeypatch):
+    config = {"callbacks": [object()]}
+    observed = {}
+
+    class FakeGraph:
+        def invoke(self, state, config=None):
+            observed["config"] = config
+            return {
+                **state,
+                "final_artifact": {"title": "done"},
+                "eval_score": 0.9,
+                "retry_count": 0,
+                "prompt_version": "prompt-v1",
+                "model_used": "test-model",
+            }
+
+    monkeypatch.setattr(sop_graph, "build_langfuse_config", lambda **kwargs: config)
+    monkeypatch.setattr(sop_graph, "flush_langfuse", lambda: observed.setdefault("flushed", True))
+    monkeypatch.setattr(sop_graph, "SOP_GRAPH", FakeGraph())
+    monkeypatch.setattr("app.events.publish", lambda event: None)
+
+    result = sop_graph.run_sop_generation(
+        "user_story", "p1", "requirement", object(), request_id="request-1",
+    )
+
+    assert observed["config"] is config
+    assert observed["flushed"] is True
+    assert result["output"] == {"title": "done"}
+    assert result["project_id"] == "p1"
