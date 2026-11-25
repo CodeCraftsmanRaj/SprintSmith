@@ -13,6 +13,7 @@ from app.config import settings
 from app.database import Base, engine
 from app.api.v1.artifacts import router as artifacts_router
 from app.api.v1.audit import router as audit_router
+from app.api.v1.admin import router as admin_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.generate import router as generate_router
 from app.api.v1.health import router as health_router
@@ -57,6 +58,7 @@ app.add_middleware(
 # Mount routers
 app.include_router(health_router)
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(requirements_router, prefix="/api/v1")
 app.include_router(artifacts_router, prefix="/api/v1")
@@ -76,7 +78,9 @@ async def auth_and_generation_rate_limit(request, call_next):
     method = request.method.upper()
     limit = None
     bucket = ""
-    if method == "POST" and path in {"/api/v1/auth/login", "/api/v1/auth/register"}:
+    if method == "POST" and path in {
+        "/api/v1/auth/login", "/api/v1/auth/admin/login", "/api/v1/auth/password-reset",
+    }:
         limit, bucket = 10, "auth"
     elif method == "POST" and "/generate" in path and path.startswith("/api/v1/projects/"):
         limit, bucket = 30, "generate"

@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     # ── Authentication ──────────────────────────────────────────────────────
     jwt_secret_key: str = "development-only-change-me"
     access_token_expire_minutes: int = 60
+    login_max_failed_attempts: int = 5
+    login_lockout_minutes: int = 15
+    password_reset_expire_minutes: int = 30
 
     # ── External Services ───────────────────────────────────────────────────
     ai_engine_url: str = "http://localhost:8001"

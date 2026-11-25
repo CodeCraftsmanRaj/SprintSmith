@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
@@ -7,7 +9,6 @@ class UserCreate(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=1, max_length=160)
     password: str = Field(min_length=8, max_length=128)
-    role: str = Field(default="member")
 
     @field_validator("full_name")
     @classmethod
@@ -24,6 +25,7 @@ class UserOut(BaseModel):
     email: EmailStr
     full_name: str
     role: str
+    is_active: bool = True
     created_at: datetime
 
 
@@ -35,3 +37,32 @@ class Token(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=160)
+    password: str = Field(min_length=8, max_length=128)
+    role: Literal["member", "admin"] = "member"
+
+    @field_validator("full_name")
+    @classmethod
+    def name_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Full name cannot be blank")
+        return value.strip()
+
+
+class AdminUserUpdate(BaseModel):
+    full_name: str | None = Field(default=None, min_length=1, max_length=160)
+    role: Literal["member", "admin"] | None = None
+    is_active: bool | None = None
+
+
+class PasswordResetRequest(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class PasswordResetTokenRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=256)
+    new_password: str = Field(min_length=8, max_length=128)

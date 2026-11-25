@@ -21,6 +21,6 @@ __all__ = [
     "ProjectOut",
     "ProjectUpdate",
     "Token",
-    "UserCreate",
     "UserOut",
+    "UserCreate",
 ]

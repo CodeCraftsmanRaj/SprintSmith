@@ -26,6 +26,13 @@ class AuthenticationError(DomainException):
         super().__init__(message, status_code=401)
 
 
+class AccountLockedError(DomainException):
+    """Account is temporarily locked after repeated failed login attempts."""
+
+    def __init__(self, message: str = "Account temporarily locked. Try again later"):
+        super().__init__(message, status_code=423)
+
+
 class AuthorisationError(DomainException):
     """Caller lacks required permissions."""
 

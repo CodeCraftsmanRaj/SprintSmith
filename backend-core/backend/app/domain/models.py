@@ -32,6 +32,10 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(20), default="member")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    password_reset_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    password_reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
 
     memberships = relationship("ProjectMember", back_populates="user", cascade="all, delete-orphan")
@@ -63,6 +67,21 @@ class ProjectMember(Base):
 
     project = relationship("Project", back_populates="members")
     user = relationship("User", back_populates="memberships")
+
+
+class ProjectInvitation(Base):
+    __tablename__ = "project_invitations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey(PROJECTS_ID_FK, ondelete="CASCADE"), index=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    role: Mapped[str] = mapped_column(String(20))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    invited_by: Mapped[str] = mapped_column(ForeignKey(USERS_ID_FK))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # ── Requirements ────────────────────────────────────────────────────────────
