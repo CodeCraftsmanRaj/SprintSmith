@@ -143,6 +143,8 @@ COLLECTION_NAME=sprintsmith_requirements
 ### D. Generate SDLC Artifact (SOP Swarm)
 * **Endpoint:** `POST /generate`
 * **Description:** Runs the LangGraph SOP pipeline `Retrieve (once) -> PM draft (Groq) -> QA: schema check + inline LLM-as-Judge -> revise|finalize` (≤2 revisions; best draft accepted on exhaustion). Response now carries `eval_score`, `retry_count`, `model_used`. Siblings: `POST /generate/stream` (SSE node transitions) and `POST /generate/compare` (parallel DEFAULT vs FALLBACK models), plus `POST /evaluate/batch` (offline RAGAS harness; admin-gated at the backend).
+
+Generation token usage is also written as a JSON `llm_usage` record to the AI engine's standard application log at `INFO` level. It includes project/artifact IDs, model, prompt/completion/total tokens, and estimated cost when available; prompts and generated content are not logged. View the AI engine process output locally, or use `docker compose logs -f ai-engine` when running via Compose. This is simple stdout logging for inspection; it does not send data to Langfuse yet.
 * **Request:**
   ```json
   {

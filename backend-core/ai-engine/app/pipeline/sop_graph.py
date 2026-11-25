@@ -30,6 +30,7 @@ from app.config import settings
 from app.llm.provider import get_llm
 from app.pipeline.chain import build_generation_chain, retrieve_context
 from app.pipeline.quality_check import _strip_code_fences, format_compliance_score
+from app.tracking.usage import log_generation_usage
 
 logger = logging.getLogger("sprintsmith.sop")
 
@@ -254,6 +255,8 @@ def run_sop_generation(artifact_type: str, project_id: str, requirement_text: st
     model_used = final.get("model_used") or final.get("model_alias") or settings.DEFAULT_LLM
     usage["total_cost_usd"] = estimate_cost_usd(
         model_used, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+    log_generation_usage(usage=usage, model=model_used, artifact_type=artifact_type,
+                         project_id=project_id)
     from app.events import GenerationEvent, publish
     publish(GenerationEvent(project_id, artifact_type, final["eval_score"], model_used,
                             final["retry_count"], usage))

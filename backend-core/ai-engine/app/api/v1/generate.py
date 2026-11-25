@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.config import settings
 from app.pipeline import sop_graph
 from app.schemas.registry import SCHEMA_REGISTRY, get_schema
-from app.tracking.usage import record_request
+from app.tracking.usage import log_generation_usage, record_request
 
 logger = logging.getLogger("sprintsmith.ai_engine")
 
@@ -134,6 +134,13 @@ async def generate_stream(req: GenerateRequest):
             retry_count=accumulated.get("retry_count", 0),
             model_used=accumulated.get("model_used"),
         ).model_dump()})
+        log_generation_usage(
+            usage=accumulated.get("usage", {}),
+            model=accumulated.get("model_used") or settings.DEFAULT_LLM,
+            artifact_type=req.artifact_type,
+            project_id=req.project_id,
+            request_id=request_id,
+        )
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

@@ -1,3 +1,4 @@
+import json
 import logging
 import threading
 from datetime import date
@@ -43,3 +44,20 @@ def build_usage_record(usage_metadata: dict | None) -> dict:
         "total_tokens": usage_metadata.get("total_tokens", 0),
         "total_cost_usd": 0.0,  # free tier -> track requests/tokens against quota instead
     }
+
+
+def log_generation_usage(*, usage: dict, model: str, artifact_type: str,
+                         project_id: str, request_id: str | None = None) -> None:
+    """Write token and cost metrics to the AI engine's configured server log."""
+    record = {
+        "event": "llm_usage",
+        "request_id": request_id,
+        "project_id": project_id,
+        "artifact_type": artifact_type,
+        "model": model,
+        "prompt_tokens": usage.get("prompt_tokens", 0),
+        "completion_tokens": usage.get("completion_tokens", 0),
+        "total_tokens": usage.get("total_tokens", 0),
+        "total_cost_usd": usage.get("total_cost_usd", 0.0),
+    }
+    logger.info("%s", json.dumps(record, sort_keys=True))
