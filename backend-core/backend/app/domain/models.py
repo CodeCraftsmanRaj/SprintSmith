@@ -103,6 +103,7 @@ class Requirement(Base):
     priority: Mapped[str] = mapped_column(String(20), default="medium", index=True)
     review_status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
+    __mapper_args__ = {"version_id_col": version}
     index_stale: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)

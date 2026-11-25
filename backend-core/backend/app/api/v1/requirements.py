@@ -10,6 +10,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.api.deps import get_current_user, get_db, get_project_service
 from app.config import settings
@@ -195,6 +196,17 @@ def _save_version(db: Session, requirement: Requirement, user: User, summary: st
     ))
 
 
+def _commit_requirement_edit(db: Session, requirement_id: str) -> None:
+    try:
+        db.commit()
+    except StaleDataError as exc:
+        db.rollback()
+        current = db.get(Requirement, requirement_id)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail={"message": "Requirement was changed by another user",
+                                    "current_version": current.version if current else None}) from exc
+
+
 @router.patch("/requirements/{requirement_id}")
 def update_requirement(
     requirement_id: str,
@@ -228,7 +240,7 @@ def update_requirement(
         db.add(AuditLog(id=str(uuid.uuid4()), user_id=user.id, action="requirement.update",
                         resource_type="requirement", resource_id=requirement.id,
                         details={"version": requirement.version, "fields": sorted(changes)}))
-        db.commit()
+        _commit_requirement_edit(db, requirement.id)
         db.refresh(requirement)
     return {**_snapshot(requirement), "id": requirement.id, "project_id": requirement.project_id,
             "index_stale": requirement.index_stale,
@@ -259,7 +271,7 @@ def review_requirement(
                         resource_type="requirement", resource_id=requirement.id,
                         details={"decision": payload.decision, "note": payload.review_note,
                                  "version": requirement.version}))
-        db.commit()
+        _commit_requirement_edit(db, requirement.id)
         db.refresh(requirement)
     return {**_snapshot(requirement), "id": requirement.id, "project_id": requirement.project_id,
             "index_stale": requirement.index_stale,
