@@ -74,7 +74,7 @@ def test_upload_inserts_document_and_queued_job(client, monkeypatch, tmp_path):
     class Connection:
         def execute(self, query, params):
             calls.append((query, params))
-            if query.startswith("SELECT"):
+            if query.lstrip().startswith("SELECT"):
                 return SimpleNamespace(fetchone=lambda: None)
 
     @contextmanager
@@ -105,7 +105,7 @@ def test_upload_deduplicates_existing_document(client, monkeypatch, tmp_path, ha
             self.select_count = 0
 
         def execute(self, query, params):
-            if query.startswith("SELECT"):
+            if query.lstrip().startswith("SELECT"):
                 self.select_count += 1
                 if self.select_count == 1:
                     return SimpleNamespace(fetchone=lambda: (document_id,))
