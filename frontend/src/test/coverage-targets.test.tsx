@@ -61,7 +61,7 @@ describe("backend API client", () => {
       new Response(JSON.stringify({ ok: true }), { status: 200 }),
     );
     await expect(api("/health", "token", { method: "POST", body: "{}" })).resolves.toEqual({ ok: true });
-    const [, init] = fetchMock.mock.calls[0];
+    const init = fetchMock.mock.calls[0]?.[1];
     const headers = new Headers(init?.headers);
     expect(headers.get("Authorization")).toBe("Bearer token");
     expect(headers.get("Content-Type")).toBe("application/json");
