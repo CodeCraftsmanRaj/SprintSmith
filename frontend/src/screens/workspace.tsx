@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Activity, ArrowDownToLine, ArrowRight, Bell, BookOpen, Check, ChevronDown, CircleHelp, Clock3, Command, Copy, Download, ExternalLink, FileText, FolderKanban, Gauge, Layers3, LogOut, Plus, RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
-import { api, apiUrl, type Artifact, type Project, type ProjectMonitoringDashboard, type Requirement, type User } from "@/lib/backend-api";
+import { Activity, ArrowDownToLine, ArrowRight, Bell, BookOpen, Check, ChevronDown, CircleHelp, Clock3, Command, Copy, Download, ExternalLink, FileText, FolderKanban, Gauge, Layers3, LogOut, Plus, RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Upload, X, Coins } from "lucide-react";
+import { api, apiUrl, type Artifact, type Project, type ProjectMonitoringDashboard, type Requirement, type User, type WorkflowRunMetrics } from "@/lib/backend-api";
 import { GenerateArtifactModal, type ArtifactType } from "@/components/generate-artifact-modal";
 
 const tokenKey = "sprintsmith_access_token";
@@ -27,6 +27,12 @@ async function getProjectMonitoringDashboard(projectId: string, authToken: strin
   }
 }
 
+const emptyRunMetrics: WorkflowRunMetrics = { run_count: 0, status_counts: {}, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, total_latency_ms: 0, average_latency_ms: 0, estimated_cost_usd: null };
+async function getWorkflowRunMetrics(projectId: string, authToken: string): Promise<WorkflowRunMetrics> {
+  try { return await api<WorkflowRunMetrics>(`/api/v1/projects/${projectId}/runs/metrics`, authToken); }
+  catch { return emptyRunMetrics; }
+}
+
 export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) => void } = {}) {
   const [token, setToken] = useState(() => typeof window === "undefined" ? "" : localStorage.getItem(tokenKey) || "");
   const [user, setUser] = useState<User | null>(null);
@@ -39,6 +45,7 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
   });
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [runMetrics, setRunMetrics] = useState<WorkflowRunMetrics>(emptyRunMetrics);
   const [page, setPage] = useState<Page>("overview");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -64,17 +71,20 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
     const selected = projectList.find((item) => item.id === selectedId) ?? projectList[0] ?? null;
     setProject(selected);
     if (selected) {
-      const [reqs, arts, dashboard] = await Promise.all([
+      const [reqs, arts, dashboard, runStats] = await Promise.all([
         api<Requirement[]>(`/api/v1/projects/${selected.id}/requirements`, authToken),
         api<Artifact[]>(`/api/v1/projects/${selected.id}/artifacts`, authToken),
         getProjectMonitoringDashboard(selected.id, authToken),
+        getWorkflowRunMetrics(selected.id, authToken),
       ]);
       setRequirements(reqs);
       setArtifacts(arts);
       setMonitoringDashboard(dashboard);
+      setRunMetrics(runStats);
     } else {
       setRequirements([]);
       setArtifacts([]);
+      setRunMetrics(emptyRunMetrics);
       setMonitoringDashboard({
         available: false,
         dashboard_url: null,
@@ -140,11 +150,12 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
     setProject(next); setBusy(true); setError("");
     setMonitoringDashboard({ available: false, dashboard_url: null, message: "Loading Grafana dashboard…" });
     try {
-      const [reqs, arts, dashboard] = await Promise.all([
+      const [reqs, arts, dashboard, runStats] = await Promise.all([
         api<Requirement[]>(`/api/v1/projects/${id}/requirements`, token), api<Artifact[]>(`/api/v1/projects/${id}/artifacts`, token),
         getProjectMonitoringDashboard(id, token),
+        getWorkflowRunMetrics(id, token),
       ]);
-      setRequirements(reqs); setArtifacts(arts); setMonitoringDashboard(dashboard); setPage("overview");
+      setRequirements(reqs); setArtifacts(arts); setMonitoringDashboard(dashboard); setRunMetrics(runStats); setPage("overview");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not open project"); }
     finally { setBusy(false); }
   }
@@ -213,6 +224,7 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
           <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> PROJECT CONSOLE</div><h1>{page === "overview" ? "Project overview" : page === "requirements" ? "Requirements" : page === "artifacts" ? "Generated artifacts" : "Activity"}</h1><p>{page === "overview" ? "A clear view of your SDLC workspace and recent progress." : page === "requirements" ? "Manage source documents and turn them into structured engineering outputs." : page === "artifacts" ? "Review and explore AI generated project deliverables." : "A timeline of work across this project."}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={refresh}><RefreshCw size={15} /> Refresh</button><button className="button button-primary" onClick={() => setPage("requirements")}><Plus size={16} /> Add requirement</button></div></section>
           {page === "overview" && <>
             <div className="metric-grid"><Metric label="Requirements" value={requirements.length} helper="Source documents" icon={FileText} color="amber" /><Metric label="Artifacts" value={artifacts.length} helper="Generated outputs" icon={Layers3} color="purple" /><Metric label="Project health" value={requirements.length ? "Active" : "Ready"} helper={requirements.length ? "Pipeline operational" : "Awaiting first input"} icon={ShieldCheck} color="green" /><Metric label="Last updated" value={artifacts[0] ? formatDate(artifacts[0].created_at) : "â€”"} helper="Most recent artifact" icon={Clock3} color="blue" /></div>
+            <div className="metric-grid"><Metric label="Orchestrated runs" value={runMetrics.run_count} helper={`${runMetrics.status_counts.completed ?? 0} completed`} icon={Activity} color="green" /><Metric label="Tokens used" value={runMetrics.total_tokens.toLocaleString()} helper={`${runMetrics.prompt_tokens.toLocaleString()} input · ${runMetrics.completion_tokens.toLocaleString()} output`} icon={Sparkles} color="purple" /><Metric label="Average latency" value={`${runMetrics.average_latency_ms.toLocaleString()} ms`} helper="Across persisted runs" icon={Clock3} color="blue" /><Metric label="Estimated cost" value={runMetrics.estimated_cost_usd === null ? "Not configured" : `$${runMetrics.estimated_cost_usd.toFixed(4)}`} helper="Configure token rates in the backend" icon={Coins} color="amber" /></div>
             <div className="dashboard-grid"><section className="panel pipeline-panel"><div className="panel-heading"><div><span className="section-kicker">WORKFLOW</span><h2>Project pipeline</h2></div><span className="live-label"><i /> LIVE STATUS</span></div><div className="pipeline"><PipelineStep icon={FileText} label="Requirements" count={requirements.length} state={requirements.length ? "complete" : "empty"} /><div className="pipeline-connector" /><PipelineStep icon={Sparkles} label="Generation" count={artifacts.length} state={artifacts.length ? "complete" : "empty"} /><div className="pipeline-connector" /><PipelineStep icon={Layers3} label="Artifacts" count={artifacts.length} state={artifacts.length ? "complete" : "empty"} /></div><div className="pipeline-foot"><span><span className="pulse-dot" />{requirements.length ? "Workspace is processing normally" : "Add a requirement to begin"}</span><button className="text-button" onClick={() => setPage("requirements")}>View requirements <ArrowRight size={14} /></button></div></section>
               <section className="panel activity-panel"><div className="panel-heading"><div><span className="section-kicker">PROJECT SNAPSHOT</span><h2>At a glance</h2></div><button className="icon-button" onClick={refresh}><RefreshCw size={15} /></button></div><div className="snapshot-row"><span className="snapshot-icon amber-bg"><FileText size={16} /></span><div><b>Source documents</b><small>Requirements in this project</small></div><strong>{requirements.length}</strong></div><div className="snapshot-row"><span className="snapshot-icon purple-bg"><Sparkles size={16} /></span><div><b>AI deliverables</b><small>Generated artifacts</small></div><strong>{artifacts.length}</strong></div><div className="snapshot-row"><span className="snapshot-icon green-bg"><Activity size={16} /></span><div><b>Backend status</b><small>Connected to API gateway</small></div><strong className="healthy">Healthy</strong></div><div className="snapshot-foot">Project created {formatDate(project.created_at)}</div></section></div>
             <section className="panel monitoring-panel" aria-labelledby="monitoring-dashboard-title">

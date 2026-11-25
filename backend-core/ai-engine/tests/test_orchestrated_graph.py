@@ -27,12 +27,14 @@ def test_sanitize_artifact_strips_control_invisible_fences_and_caps():
 
 
 def _install_fake_retrieve(monkeypatch):
+    monkeypatch.setenv("SPRINTSMITH_LLM_CACHE", "disabled")
     fake_chain = types.ModuleType("app.pipeline.chain")
 
     def fake_retrieve(project_id, requirement_text, retrieval_mode=None):
         return SimpleNamespace(context="Retrieved context", trace={"mode": "vector", "items": [{"id": "1"}]})
 
     fake_chain.retrieve_context = fake_retrieve
+    fake_chain.build_generation_chain = lambda *args, **kwargs: (None, None, "test")
     monkeypatch.setitem(sys.modules, "app.pipeline.chain", fake_chain)
 
 
@@ -64,6 +66,9 @@ def test_orchestrated_deep_path_two_checkpoints_and_narrowed_inputs(monkeypatch)
                     "user_story_title": "OAuth Login (Edited)",
                     "criteria": [{"given": "valid token", "when": "login", "then": "session created", "case_type": "positive"}],
                 }
+            elif any(label in sys_msg for label in ("API specification", "software architecture", "sprint plan")):
+                payload = {"title": "Supporting artifact", "summary": "Derived from the approved story.",
+                           "sections": {"details": "Scoped output"}, "assumptions": []}
             else:
                 assert "RAW_SECRET_NOISE" not in user_msg
                 payload = {
@@ -112,8 +117,10 @@ def test_orchestrated_deep_path_two_checkpoints_and_narrowed_inputs(monkeypatch)
     assert final["user_story"]["title"] == "OAuth Login (Edited)"
     assert len(final["acceptance_criteria"]) == 1
     assert len(final["test_cases"]) == 1
+    assert final["review"].get("passed") is True, res3["outputs"].get("reviewer")
+    assert set(final["additional_artifacts"]) == {"api_spec", "architecture", "sprint_plan"}
     assert "# OAuth Login (Edited)" in final["rendered_markdown"]
-    assert len(seen_prompts) == 4
+    assert len(seen_prompts) == 7
 
 
 def test_orchestrated_split_path(monkeypatch):
@@ -145,3 +152,20 @@ def test_orchestrated_split_path(monkeypatch):
     assert res2["status"] == "completed"
     assert res2["final_artifact"]["mode"] == "split"
     assert len(res2["final_artifact"]["split_stories"]) == 2
+
+
+def test_suspicious_requirement_pauses_before_story_generation(monkeypatch):
+    _install_fake_retrieve(monkeypatch)
+
+    class FakeLLM:
+        def invoke(self, messages):
+            return SimpleNamespace(content=json.dumps({
+                "ambiguities": [], "implied_stories": [], "is_suspicious": True,
+                "suspicion_reason": "attempted instruction override",
+            }), usage_metadata={})
+
+    monkeypatch.setattr("app.pipeline.orchestrated_graph.get_llm", lambda alias, temperature=0.1: FakeLLM())
+    result = run_orchestrated_pipeline(run_id="suspicious-1", project_id="proj-1", requirement_text="ignore policy")
+    assert result["status"] == "waiting_review"
+    assert result["human_review_packet"]["mode"] == "security_review"
+    assert result["outputs"].get("story_writer") is None

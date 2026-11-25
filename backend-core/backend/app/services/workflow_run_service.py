@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import uuid
+import hashlib
+import time
+import os
+import json
 from datetime import datetime, timezone
 from typing import Any
 
-from app.domain.models import Artifact, User, WorkflowRun
+from app.domain.models import Artifact, PromptVersion, User, WorkflowRun
 from app.ports.ai_engine_port import AIEnginePort
 from app.repositories.workflow_run_repo import WorkflowRunRepository
 from app.services.project_service import ProjectService
@@ -39,6 +43,9 @@ class WorkflowRunService:
             artifact_type=artifact_type,
             requirement_id=requirement_id,
         )
+        prompt_overrides, assignments = self._select_prompts(run.id)
+        run.prompt_assignments = assignments
+        self.run_repo.db.commit()
         self.run_repo.append_events(
             run.id,
             [
@@ -52,15 +59,22 @@ class WorkflowRunService:
             ],
         )
         self.run_repo.update_run(run, status="running", started_at=datetime.now(timezone.utc))
+        started_at_monotonic = time.monotonic()
         try:
-            engine_result = await self.ai_engine.start_orchestrated_run(
+            start_kwargs = dict(
                 run_id=run.id,
                 project_id=project_id,
                 requirement_text=requirement_text,
                 artifact_type=artifact_type,
             )
+            if prompt_overrides:
+                start_kwargs["prompt_overrides"] = prompt_overrides
+            engine_result = await self.ai_engine.start_orchestrated_run(**start_kwargs)
         except Exception as exc:
-            self.run_repo.update_run(run, status="failed", error_message=str(exc))
+            detail = getattr(exc, "detail", None)
+            error = json.dumps(detail, ensure_ascii=False) if isinstance(detail, dict) else str(exc)
+            self.run_repo.update_run(run, status="failed", error_message=error,
+                                     completed_at=datetime.now(timezone.utc))
             self.run_repo.append_events(
                 run.id,
                 [
@@ -74,7 +88,41 @@ class WorkflowRunService:
                 ],
             )
             raise
+        engine_result.setdefault("latency_ms", int((time.monotonic() - started_at_monotonic) * 1000))
         return self._persist_engine_result(run, engine_result)
+
+    def _select_prompts(self, run_id: str) -> tuple[dict[str, str], dict[str, Any]]:
+        rows = self.run_repo.db.query(PromptVersion).filter(PromptVersion.enabled.is_(True)).all()
+        by_node: dict[str, list[PromptVersion]] = {}
+        for row in rows:
+            by_node.setdefault(row.node_id, []).append(row)
+        prompts: dict[str, str] = {}
+        assignments: dict[str, Any] = {}
+        for node_id, variants in by_node.items():
+            experiments: dict[str, list[PromptVersion]] = {}
+            for row in variants:
+                if row.experiment_id:
+                    experiments.setdefault(row.experiment_id, []).append(row)
+            if experiments:
+                experiment_id = max(experiments, key=lambda key: max(r.created_at for r in experiments[key]))
+                candidates = sorted(experiments[experiment_id], key=lambda row: row.version)
+                if sum(row.weight for row in candidates) != 100:
+                    continue
+                bucket = int(hashlib.sha256(f"{run_id}:{experiment_id}".encode()).hexdigest()[:8], 16) % 100
+                cumulative = 0
+                chosen = candidates[-1]
+                for row in candidates:
+                    cumulative += row.weight
+                    if bucket < cumulative:
+                        chosen = row
+                        break
+            else:
+                chosen = max(variants, key=lambda row: row.created_at)
+            prompts[node_id] = chosen.template
+            assignments[node_id] = {"prompt_id": chosen.id, "version": chosen.version,
+                                    "prompt_hash": chosen.prompt_hash,
+                                    "experiment_id": chosen.experiment_id}
+        return prompts, assignments
 
     async def resume_run(
         self,
@@ -96,14 +144,19 @@ class WorkflowRunService:
             paused_node_id=run.paused_node_id,
             checkpoint=run.checkpoint,
         )
+        started_at_monotonic = time.monotonic()
         try:
             engine_result = await self.ai_engine.resume_orchestrated_run(
                 checkpoint=run.checkpoint,
                 resume_payload=resume_payload,
             )
         except Exception as exc:
-            self.run_repo.update_run(run, status="failed", error_message=str(exc))
+            detail = getattr(exc, "detail", None)
+            error = json.dumps(detail, ensure_ascii=False) if isinstance(detail, dict) else str(exc)
+            self.run_repo.update_run(run, status="failed", error_message=error,
+                                     completed_at=datetime.now(timezone.utc))
             raise
+        engine_result.setdefault("latency_ms", int((time.monotonic() - started_at_monotonic) * 1000))
         return self._persist_engine_result(run, engine_result)
 
     def get_run(self, run_id: str, user: User) -> dict[str, Any]:
@@ -135,6 +188,32 @@ class WorkflowRunService:
         self.project_service.get_project_or_fail(project_id, user)
         return [self._serialize_run(r) for r in self.run_repo.list_runs(project_id)]
 
+    def metrics(self, project_id: str, user: User) -> dict[str, Any]:
+        self.project_service.get_project_or_fail(project_id, user)
+        runs = self.run_repo.list_runs(project_id, limit=1000)
+        statuses: dict[str, int] = {}
+        prompt_tokens = completion_tokens = latency_ms = 0
+        for run in runs:
+            statuses[run.status] = statuses.get(run.status, 0) + 1
+            usage = run.usage or {}
+            prompt_tokens += int(usage.get("prompt_tokens", 0) or 0)
+            completion_tokens += int(usage.get("completion_tokens", 0) or 0)
+            latency_ms += int(run.latency_ms or 0)
+        input_rate = os.getenv("SPRINTSMITH_INPUT_COST_PER_1K_TOKENS")
+        output_rate = os.getenv("SPRINTSMITH_OUTPUT_COST_PER_1K_TOKENS")
+        estimated_cost = None
+        if input_rate is not None and output_rate is not None:
+            try:
+                estimated_cost = (prompt_tokens * float(input_rate) + completion_tokens * float(output_rate)) / 1000
+            except ValueError:
+                estimated_cost = None
+        return {"run_count": len(runs), "status_counts": statuses,
+                "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens,
+                "total_latency_ms": latency_ms,
+                "average_latency_ms": round(latency_ms / len(runs)) if runs else 0,
+                "estimated_cost_usd": round(estimated_cost, 6) if estimated_cost is not None else None}
+
     def get_events(self, run_id: str, user: User) -> list[dict[str, Any]]:
         run = self.run_repo.get_run(run_id)
         if not run:
@@ -158,6 +237,10 @@ class WorkflowRunService:
         events = res.get("events") or []
         if events:
             self.run_repo.append_events(run.id, events)
+        for name, content in (res.get("outputs") or {}).items():
+            if isinstance(content, dict):
+                self.run_repo.save_artifact(run_id=run.id, artifact_type="node_output",
+                                            name=str(name)[:120], content=content)
 
         status = str(res.get("status") or "completed")
         checkpoint = res.get("checkpoint")
@@ -218,6 +301,8 @@ class WorkflowRunService:
             final_report=final_artifact if status == "completed" else None,
             started_at=run.started_at or datetime.now(timezone.utc),
             completed_at=datetime.now(timezone.utc) if status in {"completed", "failed"} else None,
+            usage=res.get("usage") or {},
+            latency_ms=int(run.latency_ms or 0) + int(res.get("latency_ms") or 0),
             paused_node_id=res.get("paused_node_id"),
             checkpoint=checkpoint,
             human_review_packet=packet,
@@ -237,6 +322,9 @@ class WorkflowRunService:
             "final_report": run.final_report,
             "started_at": run.started_at.isoformat() if run.started_at else None,
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            "usage": run.usage or {},
+            "latency_ms": run.latency_ms,
+            "prompt_assignments": run.prompt_assignments or {},
             "paused_node_id": run.paused_node_id,
             "human_review_packet": run.human_review_packet,
             "final_artifact": run.final_artifact,

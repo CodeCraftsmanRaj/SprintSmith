@@ -41,7 +41,7 @@ class WorkflowRunRepository:
     def get_run(self, run_id: str) -> WorkflowRun | None:
         return self.db.get(WorkflowRun, run_id)
 
-    def list_runs(self, project_id: str, limit: int = 50) -> list[WorkflowRun]:
+    def list_runs(self, project_id: str, limit: int = 1000) -> list[WorkflowRun]:
         stmt = (
             select(WorkflowRun)
             .where(WorkflowRun.project_id == project_id)
@@ -63,6 +63,8 @@ class WorkflowRunRepository:
         final_report: dict[str, Any] | None = None,
         started_at: Any = None,
         completed_at: Any = None,
+        usage: dict[str, Any] | None = None,
+        latency_ms: int | None = None,
         error_message: str | None = None,
     ) -> WorkflowRun:
         run.status = status
@@ -73,6 +75,10 @@ class WorkflowRunRepository:
             run.started_at = started_at
         if completed_at is not None:
             run.completed_at = completed_at
+        if usage is not None:
+            run.usage = usage
+        if latency_ms is not None:
+            run.latency_ms = latency_ms
         run.paused_node_id = paused_node_id
         run.checkpoint = checkpoint
         run.human_review_packet = human_review_packet
@@ -117,6 +123,16 @@ class WorkflowRunRepository:
         name: str,
         content: dict[str, Any],
     ) -> RunArtifact:
+        existing = self.db.scalars(select(RunArtifact).where(
+            RunArtifact.run_id == run_id,
+            RunArtifact.artifact_type == artifact_type,
+            RunArtifact.name == name,
+        )).first()
+        if existing:
+            existing.content = content
+            self.db.commit()
+            self.db.refresh(existing)
+            return existing
         row = RunArtifact(
             id=str(uuid.uuid4()),
             run_id=run_id,

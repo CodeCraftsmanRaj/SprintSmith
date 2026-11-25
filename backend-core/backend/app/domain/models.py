@@ -224,6 +224,9 @@ class WorkflowRun(Base):
     status: Mapped[str] = mapped_column(String(32), default="created", index=True)
     current_node: Mapped[str | None] = mapped_column(String(80), nullable=True)
     final_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    prompt_assignments: Mapped[dict] = mapped_column(JSON, default=dict)
+    usage: Mapped[dict] = mapped_column(JSON, default=dict)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     paused_node_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     checkpoint: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     human_review_packet: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -256,4 +259,21 @@ class RunArtifact(Base):
     artifact_type: Mapped[str] = mapped_column(String(80))
     name: Mapped[str] = mapped_column(String(120))
     content: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+
+
+class PromptVersion(Base):
+    """Versioned orchestrated prompt template with weighted experiment assignment."""
+    __tablename__ = "prompt_versions"
+    __table_args__ = (UniqueConstraint("node_id", "version"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(80), index=True)
+    version: Mapped[str] = mapped_column(String(80))
+    template: Mapped[str] = mapped_column(Text)
+    prompt_hash: Mapped[str] = mapped_column(String(64))
+    experiment_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    weight: Mapped[int] = mapped_column(Integer, default=100)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey(USERS_ID_FK))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)

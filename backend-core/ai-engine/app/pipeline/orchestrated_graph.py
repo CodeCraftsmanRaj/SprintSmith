@@ -12,6 +12,7 @@ import json
 import logging
 import re
 import uuid
+import time
 from functools import wraps
 from datetime import datetime, timezone
 from typing import Annotated, Any, TypedDict
@@ -103,6 +104,8 @@ class ComposedStoryArtifact(BaseModel):
     test_cases: list[TestCase] = Field(default_factory=list)
     split_stories: list[SplitStoryPlaceholder] = Field(default_factory=list)
     deferred_stories: list[ImpliedStory] = Field(default_factory=list)
+    additional_artifacts: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    review: dict[str, Any] = Field(default_factory=dict)
     rendered_markdown: str = ""
     sanitize_report: dict[str, Any] = Field(default_factory=dict)
 
@@ -143,6 +146,12 @@ class ComposedStoryArtifact(BaseModel):
                 lines.extend(f"- {step}" for step in tc.steps)
                 lines.append(f"- **Expected:** {tc.expected_result}")
                 lines.append("")
+        for key, supporting in self.additional_artifacts.items():
+            lines.extend([f"## {supporting.get('title') or key.replace('_', ' ').title()}", "",
+                          str(supporting.get("summary", "")), ""])
+            for section, detail in (supporting.get("sections") or {}).items():
+                lines.extend([f"### {section.replace('_', ' ').title()}", "",
+                              detail if isinstance(detail, str) else json.dumps(detail, ensure_ascii=False, indent=2), ""])
         return "\n".join(lines).strip()
 
 
@@ -170,6 +179,7 @@ class OrchestratedState(TypedDict, total=False):
     draft_story: dict[str, Any]
     acceptance_criteria: list[dict[str, Any]]
     test_cases: list[dict[str, Any]]
+    additional_artifacts: Annotated[dict[str, Any], _merge_dict]
     final_artifact: dict[str, Any]
 
     # Orchestration & HITL state (DevAgent-Studio pattern)
@@ -183,6 +193,7 @@ class OrchestratedState(TypedDict, total=False):
     model_used: Annotated[str, _take_latest]
     node_policies: dict[str, dict[str, Any]]
     node_failures: Annotated[dict[str, Any], _merge_dict]
+    prompt_overrides: dict[str, str]
 
 
 def _emit_event(
@@ -211,9 +222,21 @@ def _with_node_policy(node_id: str, node_fn):
     def wrapped(state: OrchestratedState) -> dict[str, Any]:
         policy = (state.get("node_policies") or {}).get(node_id, {})
         retries = max(0, min(int(policy.get("retry_count", 0)), 5))
+        started = time.perf_counter()
         for attempt in range(retries + 1):
             try:
-                return node_fn(state)
+                result = node_fn(state)
+                previous = state.get("usage") or {}
+                current = result.get("usage") or previous
+                metrics = {
+                    "latency_ms": round((time.perf_counter() - started) * 1000),
+                    "retry_count": attempt,
+                    "usage": {key: max(0, int(current.get(key, 0) or 0) - int(previous.get(key, 0) or 0))
+                              for key in ("prompt_tokens", "completion_tokens", "total_tokens")},
+                }
+                for event in result.get("events", []):
+                    event["data"] = {**(event.get("data") or {}), **metrics}
+                return result
             except Exception as exc:
                 if attempt < retries:
                     continue
@@ -316,6 +339,7 @@ def analyst_node(state: OrchestratedState) -> dict[str, Any]:
         '"implied_stories":[{"title":"...","summary":"..."}],'
         '"is_suspicious":false,"suspicion_reason":""}'
     )
+    system = (state.get("prompt_overrides") or {}).get("analyst", system)
     user = (
         f"Requirement:\n{state['requirement_text']}\n\n"
         f"Context:\n{state.get('context', '') or '(none)'}"
@@ -432,6 +456,7 @@ def story_writer_node(state: OrchestratedState) -> dict[str, Any]:
         '"objective":"...","actor":"...","priority":"High|Medium|Low",'
         '"story_points":3,"assumptions":["..."],"dependencies":[]}'
     )
+    system = (state.get("prompt_overrides") or {}).get("story_writer", system)
     po_answers = state.get("po_answers") or {}
     answers_block = "\n".join(f"- Q: {q}\n  A: {a}" for q, a in po_answers.items()) or "(none)"
     picked = state.get("picked_story")
@@ -486,6 +511,7 @@ def ac_generator_node(state: OrchestratedState) -> dict[str, Any]:
         "Respond ONLY with JSON matching: "
         '{"user_story_title":"...","criteria":[{"given":"...","when":"...","then":"...","case_type":"positive|negative|edge"}]}'
     )
+    system = (state.get("prompt_overrides") or {}).get("ac_generator", system)
     user = (
         f"Title: {story.get('title', '')}\n"
         f"User Story: {story.get('story', '')}\n"
@@ -513,6 +539,7 @@ def test_case_writer_node(state: OrchestratedState) -> dict[str, Any]:
         '{"cases":[{"id":"TC-1","title":"...","category":"positive|negative|boundary|security",'
         '"steps":["..."],"expected_result":"...","traceability":"AC-1"}]}'
     )
+    system = (state.get("prompt_overrides") or {}).get("test_case_writer", system)
     user = (
         f"User Story: {story.get('title', '')} — {story.get('story', '')}\n"
         f"Acceptance Criteria:\n{json.dumps(criteria, indent=2)}"
@@ -525,6 +552,34 @@ def test_case_writer_node(state: OrchestratedState) -> dict[str, Any]:
         "usage": _accumulate_usage(state.get("usage", {}), raw),
         "model_used": alias,
         "events": [_emit_event(state, "test_case_writer", "test_case_writer", "completed", f"Generated {len(cases)} test cases")],
+    }
+
+
+class SupportingArtifactOutput(BaseModel):
+    title: str
+    summary: str
+    sections: dict[str, Any] = Field(default_factory=dict)
+    assumptions: list[str] = Field(default_factory=list)
+
+
+def _supporting_artifact_node(state: OrchestratedState, node_id: str, label: str) -> dict[str, Any]:
+    story = state.get("draft_story") or {}
+    system = (
+        f"You are a senior {label} specialist. Create a concise, actionable {label} based only on the approved user story. "
+        'Respond ONLY as JSON matching {"title":"...","summary":"...","sections":{},"assumptions":[]}. '
+        "Do not invent requirements; call out uncertainty as assumptions."
+    )
+    system = (state.get("prompt_overrides") or {}).get(node_id, system)
+    user = json.dumps({"title": story.get("title"), "story": story.get("story"),
+                       "objective": story.get("objective"), "assumptions": story.get("assumptions", [])})
+    parsed, raw, alias = _invoke_json_agent(system, user, SupportingArtifactOutput, state.get("model_alias"))
+    data = parsed.model_dump()
+    return {
+        "additional_artifacts": {node_id: data},
+        "outputs": {node_id: data},
+        "usage": _accumulate_usage(state.get("usage", {}), raw),
+        "model_used": alias,
+        "events": [_emit_event(state, node_id, node_id, "completed", f"Generated {label}")],
     }
 
 
@@ -553,6 +608,7 @@ def composer_node(state: OrchestratedState) -> dict[str, Any]:
             acceptance_criteria=[AcceptanceCriterion.model_validate(c) for c in state.get("acceptance_criteria", [])],
             test_cases=[TestCase.model_validate(t) for t in state.get("test_cases", [])],
             deferred_stories=deferred,
+            additional_artifacts=state.get("additional_artifacts") or {},
         )
 
     cleaned_md, report = sanitize_artifact(artifact.render_markdown())
@@ -576,7 +632,7 @@ def reviewer_node(state: OrchestratedState) -> dict[str, Any]:
     """Run SprintSmith's existing LLM judge over the deterministic artifact."""
     from app.pipeline.sop_graph import judge_score, APPROVAL_THRESHOLD
 
-    artifact = state.get("final_artifact") or {}
+    artifact = dict(state.get("final_artifact") or {})
     score, reasoning = judge_score(state.get("requirement_text", ""), json.dumps(artifact))
     passed = score >= APPROVAL_THRESHOLD
     review = {"score": round(score, 4), "passed": passed, "reasoning": reasoning,
@@ -598,9 +654,14 @@ def build_orchestrated_graph(entry_point: str = "retrieve"):
     g.add_node("split", split_node)
     g.add_node("story_writer", _with_node_policy("story_writer", story_writer_node))
     g.add_node("story_review_checkpoint", story_review_checkpoint_node)
+    g.add_node("fanout", lambda state: {"events": [_emit_event(state, "fanout", "orchestrator", "completed", "Launching parallel artifact branches")]})
     g.add_node("ac_generator", _with_node_policy("ac_generator", ac_generator_node))
     g.add_node("test_case_writer", _with_node_policy("test_case_writer", test_case_writer_node))
+    g.add_node("api_spec", _with_node_policy("api_spec", lambda state: _supporting_artifact_node(state, "api_spec", "API specification")))
+    g.add_node("architecture", _with_node_policy("architecture", lambda state: _supporting_artifact_node(state, "architecture", "software architecture")))
+    g.add_node("sprint_plan", _with_node_policy("sprint_plan", lambda state: _supporting_artifact_node(state, "sprint_plan", "sprint plan")))
     g.add_node("composer", _with_node_policy("composer", composer_node))
+    g.add_node("composer_split", composer_node)
     g.add_node("reviewer", _with_node_policy("reviewer", reviewer_node))
 
     g.set_entry_point(entry_point)
@@ -611,15 +672,17 @@ def build_orchestrated_graph(entry_point: str = "retrieve"):
         _route_after_po_checkpoint,
         {"pause": END, "split": "split", "deep": "story_writer"},
     )
-    g.add_edge("split", "composer")
+    g.add_edge("split", "composer_split")
+    g.add_edge("composer_split", "reviewer")
     g.add_edge("story_writer", "story_review_checkpoint")
     g.add_conditional_edges(
         "story_review_checkpoint",
         _route_after_story_review,
-        {"pause": END, "continue": "ac_generator"},
+        {"pause": END, "continue": "fanout"},
     )
+    g.add_conditional_edges("fanout", lambda state: ["ac_generator", "api_spec", "architecture", "sprint_plan"])
     g.add_edge("ac_generator", "test_case_writer")
-    g.add_edge("test_case_writer", "composer")
+    g.add_edge(["test_case_writer", "api_spec", "architecture", "sprint_plan"], "composer")
     g.add_edge("composer", "reviewer")
     g.add_edge("reviewer", END)
     return g.compile()
@@ -658,6 +721,7 @@ def run_orchestrated_pipeline(
     artifact_type: str = "user_story",
     model_alias: str | None = None,
     retrieval_mode: str | None = None,
+    prompt_overrides: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     raise_if_secrets_found(requirement_text)
     graph = build_orchestrated_graph(entry_point="retrieve")
@@ -678,8 +742,12 @@ def run_orchestrated_pipeline(
             "story_writer": {"retry_count": 1, "fail_strategy": "halt"},
             "ac_generator": {"retry_count": 1, "fail_strategy": "halt"},
             "test_case_writer": {"retry_count": 1, "fail_strategy": "halt"},
+            "api_spec": {"retry_count": 1, "fail_strategy": "continue"},
+            "architecture": {"retry_count": 1, "fail_strategy": "continue"},
+            "sprint_plan": {"retry_count": 1, "fail_strategy": "continue"},
             "reviewer": {"retry_count": 1, "fail_strategy": "continue"},
         },
+        "prompt_overrides": prompt_overrides or {},
     }
     final = graph.invoke(initial_state)
     return _format_run_response(final)

@@ -30,7 +30,8 @@ class AIEnginePort(ABC):
 
     @abstractmethod
     async def start_orchestrated_run(self, run_id: str, project_id: str, requirement_text: str,
-                                     artifact_type: str = "user_story") -> dict: ...
+                                     artifact_type: str = "user_story",
+                                     prompt_overrides: dict[str, str] | None = None) -> dict: ...
 
     @abstractmethod
     async def resume_orchestrated_run(self, checkpoint: dict, resume_payload: dict) -> dict: ...

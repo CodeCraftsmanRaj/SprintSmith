@@ -155,6 +155,7 @@ class AIEngineClient(AIEnginePort):
         project_id: str,
         requirement_text: str,
         artifact_type: str = "user_story",
+        prompt_overrides: dict[str, str] | None = None,
     ) -> dict:
         return await self._request(
             "POST",
@@ -164,6 +165,7 @@ class AIEngineClient(AIEnginePort):
                 "project_id": project_id,
                 "requirement_text": requirement_text,
                 "artifact_type": artifact_type,
+                "prompt_overrides": prompt_overrides or {},
             },
         )
 

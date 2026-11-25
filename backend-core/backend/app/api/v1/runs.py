@@ -5,7 +5,7 @@ from typing import Any
 import asyncio
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -79,6 +79,15 @@ def list_workflow_runs(
         raise HTTPException(status_code=403, detail="Access denied") from exc
 
 
+@router.get("/projects/{project_id}/runs/metrics")
+def workflow_run_metrics(project_id: str, service: WorkflowRunService = Depends(_run_service),
+                         user: User = Depends(get_current_user)):
+    try:
+        return service.metrics(project_id, user)
+    except Exception as exc:
+        raise HTTPException(status_code=403, detail="Access denied") from exc
+
+
 @router.get("/runs/{run_id}")
 def get_workflow_run(
     run_id: str,
@@ -112,6 +121,7 @@ async def stream_workflow_run_events(
     run_id: str,
     service: WorkflowRunService = Depends(_run_service),
     user: User = Depends(get_current_user),
+    last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
 ):
     """SSE event log for reconnecting clients; emits persisted events by event id."""
     try:
@@ -123,6 +133,14 @@ async def stream_workflow_run_events(
 
     async def event_stream():
         seen: set[str] = set()
+        if last_event_id:
+            initial_events = service.run_repo.list_events(run_id)
+            for event in initial_events:
+                seen.add(event.id)
+                if event.id == last_event_id:
+                    break
+            if last_event_id not in seen:
+                seen.clear()
         while True:
             events = service.run_repo.list_events(run_id)
             for event in events:

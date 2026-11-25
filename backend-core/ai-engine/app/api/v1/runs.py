@@ -24,6 +24,7 @@ class RunStartRequest(BaseModel):
     artifact_type: str = "user_story"
     model_alias: str | None = None
     retrieval_mode: str | None = None
+    prompt_overrides: dict[str, str] = Field(default_factory=dict)
 
 
 class RunResumeRequest(BaseModel):
@@ -45,6 +46,7 @@ def start_run(req: RunStartRequest) -> dict[str, Any]:
             artifact_type=req.artifact_type,
             model_alias=req.model_alias,
             retrieval_mode=req.retrieval_mode,
+            prompt_overrides=req.prompt_overrides,
         )
     except Exception as exc:
         logger.exception("Orchestrated run start failed for run_id=%s", run_id)

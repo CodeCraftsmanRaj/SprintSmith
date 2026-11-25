@@ -5,6 +5,7 @@ export type ProjectMonitoringDashboard = { available: boolean; dashboard_url: st
 export type Requirement = { id: string; filename: string; doc_type: string; chunks_indexed: number; created_at: string; content?: string };
 export type Artifact = { id: string; artifact_type: string; title: string; content: Record<string, unknown>; version: number; created_at: string };
 export type User = { id: string; email: string; full_name: string; role: string };
+export type WorkflowRunMetrics = { run_count: number; status_counts: Record<string, number>; prompt_tokens: number; completion_tokens: number; total_tokens: number; total_latency_ms: number; average_latency_ms: number; estimated_cost_usd: number | null };
 
 export async function api<T>(path: string, token?: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
