@@ -5,9 +5,11 @@ Artifact generation, update, evaluation, and export API endpoints.
 import io
 import json
 import zipfile
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pathlib import Path
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+import yaml
 
 from app.api.deps import get_artifact_service, get_current_user, get_db
 from app.core.exceptions import AuthorisationError, ResourceNotFoundError, ValidationError
@@ -37,6 +39,53 @@ def create_evaluation_baseline(
 ):
     try:
         return artifact_service.create_baseline(project_id, payload.model_dump(), user)
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except AuthorisationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+
+@router.post("/projects/{project_id}/evaluation-baselines/upload", status_code=status.HTTP_201_CREATED)
+async def upload_evaluation_baseline(
+    project_id: str,
+    file: UploadFile = File(...),
+    artifact_type: str = Form(..., min_length=1, max_length=80),
+    title: str | None = Form(default=None, max_length=255),
+    artifact_service: ArtifactService = Depends(get_artifact_service),
+    user: User = Depends(get_current_user),
+):
+    """Upload a human baseline as JSON, YAML, Markdown, or plain text (up to 1 MB)."""
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in {".json", ".yaml", ".yml", ".md", ".txt"}:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                            detail="Supported baseline formats are JSON, YAML, Markdown, and text")
+    raw = await file.read(1_000_001)
+    if len(raw) > 1_000_000:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail="Baseline file must be 1 MB or smaller")
+    try:
+        text_content = raw.decode("utf-8")
+        if suffix == ".json":
+            content = json.loads(text_content)
+        elif suffix in {".yaml", ".yml"}:
+            content = yaml.safe_load(text_content)
+        else:
+            content = {"text": text_content}
+    except (UnicodeDecodeError, json.JSONDecodeError, yaml.YAMLError, ValueError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Baseline file must contain valid UTF-8 JSON, YAML, or text") from e
+    if not isinstance(content, dict) or not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Structured baseline files must contain a non-empty object")
+    try:
+        return artifact_service.create_baseline(project_id, {
+            "artifact_type": artifact_type,
+            "title": (title or Path(file.filename or "Baseline").stem)[:255],
+            "source_name": (file.filename or "")[:255],
+            "content": content,
+        }, user)
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except AuthorisationError as e:
