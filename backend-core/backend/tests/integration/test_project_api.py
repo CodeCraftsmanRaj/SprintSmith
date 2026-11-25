@@ -92,3 +92,33 @@ def test_project_membership_management(client, pm_headers, dev_user, dev_headers
         headers=pm_headers,
     )
     assert unknown_user.status_code == 404
+
+
+def test_invitation_can_be_revoked(client, dev_headers):
+    project = client.post(
+        "/api/v1/projects",
+        json={"name": "Invitation lifecycle"},
+        headers=dev_headers,
+    )
+    assert project.status_code == 201
+    project_id = project.json()["id"]
+
+    invitation = client.post(
+        f"/api/v1/projects/{project_id}/invitations",
+        json={"email": "pending@example.com", "role": "viewer"},
+        headers=dev_headers,
+    )
+    assert invitation.status_code == 201
+
+    revoked = client.delete(
+        f"/api/v1/projects/{project_id}/invitations/{invitation.json()['id']}",
+        headers=dev_headers,
+    )
+    assert revoked.status_code == 204
+
+    team = client.get(f"/api/v1/projects/{project_id}/members", headers=dev_headers)
+    assert team.status_code == 200
+    assert next(
+        item for item in team.json()["invitations"]
+        if item["id"] == invitation.json()["id"]
+    )["status"] == "revoked"

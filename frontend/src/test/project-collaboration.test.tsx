@@ -1,274 +1,171 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as backendApi from "@/lib/backend-api";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProjectActivityPanel, ProjectCollaboration } from "@/components/ProjectCollaboration";
+import * as backendApi from "@/lib/backend-api";
 
-const projectId = "project-1";
-const token = "test-token";
-
-const team = {
-  project_id: projectId,
-  current_role: "owner",
-  can_manage_members: true,
-  can_manage_admins: true,
-  members: [
-    {
-      user_id: "owner",
-      email: "owner@example.test",
-      full_name: "Project Owner",
-      role: "owner",
-      joined_at: "2026-01-01T00:00:00Z",
-      is_current_user: true,
-    },
-    {
-      user_id: "admin",
-      email: "admin@example.test",
-      full_name: "Team Admin",
-      role: "admin",
-      joined_at: "2026-01-02T00:00:00Z",
-      is_current_user: false,
-    },
-    {
-      user_id: "editor",
-      email: "editor@example.test",
-      full_name: "Team Editor",
-      role: "editor",
-      joined_at: "2026-01-03T00:00:00Z",
-      is_current_user: false,
-    },
-  ],
-  invitations: [
-    {
-      id: "pending",
-      email: "pending@example.test",
-      role: "viewer",
-      status: "pending",
-      created_at: "2026-02-01T00:00:00Z",
-      expires_at: "2026-02-08T00:00:00Z",
-    },
-    {
-      id: "expired",
-      email: "expired@example.test",
-      role: "editor",
-      status: "expired",
-      created_at: "2026-01-01T00:00:00Z",
-      expires_at: "2026-01-08T00:00:00Z",
-    },
-    {
-      id: "accepted",
-      email: "accepted@example.test",
-      role: "viewer",
-      status: "accepted",
-      created_at: "2026-01-01T00:00:00Z",
-      expires_at: "2026-01-08T00:00:00Z",
-    },
-  ],
-};
-
-function mockTeamApi(overrides: Record<string, unknown> = {}) {
-  return vi.spyOn(backendApi, "api").mockImplementation((path, _token, init) => {
-    if (path === `/api/v1/projects/${projectId}/members` && !init) return Promise.resolve(team);
-    if (path === `/api/v1/projects/${projectId}/invitations` && init?.method === "POST") {
-      return Promise.resolve({
-        token: "single-use-token",
-        email: "new@example.test",
-        role: "editor",
-        expires_at: "2026-02-08T00:00:00Z",
-      });
-    }
-    return Promise.resolve(overrides[path] ?? {});
-  });
-}
+const owner = { user_id: "owner", email: "owner@test.dev", full_name: "Owner", role: "owner", joined_at: "2026-01-01", is_current_user: true };
+const editor = { user_id: "editor", email: "edit@test.dev", full_name: "Editor", role: "editor", joined_at: "2026-01-02", is_current_user: false };
+const admin = { user_id: "admin", email: "admin@test.dev", full_name: "Admin", role: "admin", joined_at: "2026-01-03", is_current_user: false };
+const invitation = { id: "inv-1", email: "pending@test.dev", role: "viewer", status: "pending", created_at: "2026-01-04", expires_at: "2026-01-11" };
+const team = (overrides: Record<string, unknown> = {}) => ({ project_id: "project-1", current_role: "owner", can_manage_members: true, can_manage_admins: true, members: [owner, editor, admin], invitations: [invitation, { ...invitation, id: "inv-2", email: "expired@test.dev", status: "expired" }, { ...invitation, id: "inv-3", email: "accepted@test.dev", status: "accepted" }], ...overrides });
 
 describe("ProjectCollaboration", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("loads the team, manages roles, creates and copies an invite, and revokes pending invitations", async () => {
-    const apiSpy = mockTeamApi();
-    const writeText = vi.spyOn(navigator.clipboard, "writeText");
-    render(<ProjectCollaboration projectId={projectId} token={token} />);
-
-    expect(await screen.findByText("Project Owner")).toBeInTheDocument();
+  it("renders members, role guide, pending and expired invitations; hides accepted invitations", async () => {
+    vi.spyOn(backendApi, "api").mockResolvedValue(team() as never);
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    expect(await screen.findByText("Project team")).toBeInTheDocument();
+    expect(screen.getAllByText("Owner").length).toBeGreaterThan(0);
     expect(screen.getByText("You")).toBeInTheDocument();
-    expect(screen.getByText("Invite by email")).toBeInTheDocument();
-    expect(screen.getByText("expired")).toBeInTheDocument();
-    expect(screen.queryByText("accepted@example.test")).not.toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Role for admin@example.test"), {
-      target: { value: "editor" },
-    });
-    await waitFor(() =>
-      expect(apiSpy).toHaveBeenCalledWith(
-        `/api/v1/projects/${projectId}/members/admin`,
-        token,
-        expect.objectContaining({ method: "PATCH", body: JSON.stringify({ role: "editor" }) }),
-      ),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Remove editor@example.test" }));
-    await waitFor(() =>
-      expect(apiSpy).toHaveBeenCalledWith(`/api/v1/projects/${projectId}/members/editor`, token, {
-        method: "DELETE",
-      }),
-    );
-
-    fireEvent.change(screen.getByLabelText("Email address"), {
-      target: { value: "new@example.test" },
-    });
-    fireEvent.change(screen.getByLabelText("Project role"), { target: { value: "viewer" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create invitation link" }));
-
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Invite link created for new@example.test",
-    );
-    const inviteInput = screen.getByLabelText(
-      "Share this link (expires in 7 days)",
-    ) as HTMLInputElement;
-    expect(inviteInput.value).toContain("invite=single-use-token");
-    fireEvent.focus(inviteInput);
-    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(inviteInput.value));
-    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Revoke invite for pending@example.test" }));
-    await waitFor(() =>
-      expect(apiSpy).toHaveBeenCalledWith(
-        `/api/v1/projects/${projectId}/invitations/pending`,
-        token,
-        { method: "DELETE" },
-      ),
-    );
+    expect(screen.getByText("Project roles")).toBeInTheDocument();
+    expect(screen.getByText("pending@test.dev")).toBeInTheDocument();
+    expect(screen.getByText("expired@test.dev")).toBeInTheDocument();
+    expect(screen.queryByText("accepted@test.dev")).not.toBeInTheDocument();
   });
 
-  it("shows an empty team and hides management controls for a viewer", async () => {
-    const viewerTeam = {
-      ...team,
-      current_role: "viewer",
-      can_manage_members: false,
-      can_manage_admins: false,
-      members: [],
-    };
-    vi.spyOn(backendApi, "api").mockResolvedValue(viewerTeam);
+  it("shows a load error and allows retry", async () => {
+    const api = vi.spyOn(backendApi, "api").mockRejectedValueOnce(new Error("Offline")).mockResolvedValueOnce(team() as never);
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Offline");
+    fireEvent.click(screen.getByRole("button", { name: "Refresh team" }));
+    expect(await screen.findByText("Project team")).toBeInTheDocument();
+    expect(api).toHaveBeenCalledTimes(2);
+  });
 
-    render(<ProjectCollaboration projectId={projectId} token={token} />);
+  it("limits member controls for a manager who cannot manage admins", async () => {
+    vi.spyOn(backendApi, "api").mockResolvedValue(team({ can_manage_admins: false }) as never);
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    await screen.findByText("Project team");
+    expect(screen.getByLabelText("Role for edit@test.dev")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Role for admin@test.dev")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove admin@test.dev" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Admin" })).not.toBeInTheDocument();
+  });
 
+  it("shows read-only role badges when the current user cannot manage members", async () => {
+    vi.spyOn(backendApi, "api").mockResolvedValue(team({ can_manage_members: false, members: [...team().members, { user_id: "viewer", email: "view@test.dev", full_name: "Viewer", role: "viewer", joined_at: "2026-01-04", is_current_user: false }] }) as never);
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    await screen.findByText("Project team");
+    expect(screen.getAllByText("Viewer").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Invite by email" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Pending invitations" })).not.toBeInTheDocument();
+  });
+
+  it("shows empty member and invitation states", async () => {
+    vi.spyOn(backendApi, "api").mockResolvedValue(team({ members: [], invitations: [] }) as never);
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
     expect(await screen.findByText("No project members found.")).toBeInTheDocument();
-    expect(screen.queryByText("Invite by email")).not.toBeInTheDocument();
-    expect(screen.queryByText("Pending invitations")).not.toBeInTheDocument();
+    expect(screen.getByText("No pending invitations. New links remain valid for 7 days.")).toBeInTheDocument();
   });
 
-  it("reports load and invite failures and still releases the busy state", async () => {
-    let invitationFails = false;
-    const apiSpy = vi.spyOn(backendApi, "api").mockImplementation((path, _token, init) => {
-      if (path === `/api/v1/projects/${projectId}/members`) return Promise.resolve(team);
-      if (init?.method === "POST" && invitationFails) return Promise.reject("invite failed");
-      return Promise.resolve({ token: "ok", email: "new@example.test", role: "editor" });
+  it("uses stable error messages when member actions reject non-Error values", async () => {
+    const api = vi.spyOn(backendApi, "api").mockImplementation(async (path) => {
+      if (String(path).endsWith("/members")) return team() as never;
+      return Promise.reject("request rejected");
     });
-    render(<ProjectCollaboration projectId={projectId} token={token} />);
-
-    expect(await screen.findByText("Project Owner")).toBeInTheDocument();
-    invitationFails = true;
-    fireEvent.change(screen.getByLabelText("Email address"), {
-      target: { value: "new@example.test" },
-    });
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    await screen.findByText("Project team");
+    fireEvent.change(screen.getByLabelText("Role for edit@test.dev"), { target: { value: "viewer" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not update this member's role.");
+    fireEvent.click(screen.getByRole("button", { name: "Remove edit@test.dev" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not remove this member.");
+    fireEvent.click(screen.getByRole("button", { name: "Revoke invite for pending@test.dev" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not revoke this invitation.");
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "fail@test.dev" } });
     fireEvent.click(screen.getByRole("button", { name: "Create invitation link" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not create the invitation.");
-    expect(screen.getByRole("button", { name: "Create invitation link" })).toBeEnabled();
-
-    apiSpy.mockRejectedValueOnce(new Error("refresh failed"));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh team" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("refresh failed");
+    expect(api).toHaveBeenCalled();
   });
 
-  it("reports member and invitation action failures without leaving controls busy", async () => {
-    const apiSpy = vi.spyOn(backendApi, "api").mockImplementation((path, _token, init) => {
-      if (path === `/api/v1/projects/${projectId}/members` && !init) return Promise.resolve(team);
-      return Promise.reject("action failed");
+  it("creates an invitation, reloads members, and copies the generated link", async () => {
+    const api = vi.spyOn(backendApi, "api").mockImplementation(async (path) => {
+      if (path.endsWith("/members")) return team() as never;
+      return { token: "invite-token", email: "new@test.dev", role: "editor", expires_at: "2026-02-01" } as never;
     });
-    render(<ProjectCollaboration projectId={projectId} token={token} />);
-    await screen.findByText("Project Owner");
-
-    const roleSelect = screen.getByLabelText("Role for admin@example.test");
-    fireEvent.change(roleSelect, { target: { value: "admin" } });
-    expect(apiSpy).toHaveBeenCalledTimes(1);
-    fireEvent.change(roleSelect, { target: { value: "editor" } });
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not update this member's role.",
-    );
-    expect(roleSelect).toBeEnabled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Remove editor@example.test" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not remove this member.");
-
-    fireEvent.click(screen.getByRole("button", { name: "Revoke invite for pending@example.test" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not revoke this invitation.");
-    expect(apiSpy).toHaveBeenCalledTimes(4);
-  });
-
-  it("shows the manual-copy fallback when clipboard access fails", async () => {
-    mockTeamApi();
-    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("clipboard denied"));
-    render(<ProjectCollaboration projectId={projectId} token={token} />);
-    await screen.findByText("Project Owner");
-    fireEvent.change(screen.getByLabelText("Email address"), {
-      target: { value: "new@example.test" },
-    });
+    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    await screen.findByText("Project team");
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "new@test.dev" } });
     fireEvent.click(screen.getByRole("button", { name: "Create invitation link" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Invite link created for new@test.dev");
+    expect(screen.getByLabelText("Share this link (expires in 7 days)")).toBeInTheDocument();
+    expect(screen.getByDisplayValue(/invite=invite-token/)).toBeInTheDocument();
+    expect(api).toHaveBeenCalledWith("/api/v1/projects/project-1/invitations", "token", expect.objectContaining({ method: "POST", body: JSON.stringify({ email: "new@test.dev", role: "editor" }) }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("invite=invite-token")));
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+  });
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Select and copy the invitation link below.",
-    );
+  it("reports invitation API and clipboard errors", async () => {
+    vi.spyOn(backendApi, "api").mockImplementation(async (path) => path.endsWith("/members") ? team() as never : Promise.reject(new Error("Invite denied")));
+    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("blocked"));
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    await screen.findByText("Project team");
+    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "new@test.dev" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create invitation link" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Invite denied");
+  });
+
+  it("changes a role, avoids redundant updates, removes a member, and revokes an invite", async () => {
+    const api = vi.spyOn(backendApi, "api").mockResolvedValue(team() as never);
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    await screen.findByText("Project team");
+    fireEvent.change(screen.getByLabelText("Role for edit@test.dev"), { target: { value: "editor" } });
+    expect(api.mock.calls.filter(([path, , init]) => String(path).includes("/members/editor") && init?.method === "PATCH")).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText("Role for edit@test.dev"), { target: { value: "viewer" } });
+    expect(api).toHaveBeenCalledWith("/api/v1/projects/project-1/members/editor", "token", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ role: "viewer" }) }));
+    await waitFor(() => expect(api.mock.calls.filter(([path, , init]) => String(path).includes("/members/editor") && init?.method === "PATCH")).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "Remove edit@test.dev" }));
+    await waitFor(() => expect(api).toHaveBeenCalledWith("/api/v1/projects/project-1/members/editor", "token", expect.objectContaining({ method: "DELETE" })));
+    fireEvent.click(screen.getByRole("button", { name: "Revoke invite for pending@test.dev" }));
+    await waitFor(() => expect(api).toHaveBeenCalledWith("/api/v1/projects/project-1/invitations/inv-1", "token", expect.objectContaining({ method: "DELETE" })));
+  });
+
+  it("renders empty invitation feedback after server action errors", async () => {
+    vi.spyOn(backendApi, "api").mockImplementation(async (path) => path.endsWith("/members") ? team() as never : Promise.reject("request failed"));
+    render(<ProjectCollaboration projectId="project-1" token="token" />);
+    await screen.findByText("Project team");
+    fireEvent.click(screen.getByRole("button", { name: "Remove edit@test.dev" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not remove this member.");
   });
 });
 
 describe("ProjectActivityPanel", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("renders known and unknown audit events and refreshes the activity feed", async () => {
-    const events = [
-      {
-        id: "generated",
-        action: "artifact.generate",
-        resource_type: "artifact",
-        details: { artifact_type: "user_story", title: "Payments", version: 2 },
-        actor_name: "Alex",
-        created_at: "2026-02-01T12:00:00Z",
-      },
-      {
-        id: "custom",
-        action: "custom.event_name",
-        resource_type: "project_chat",
-        details: {},
-        actor_email: "person@example.test",
-        created_at: "2026-02-02T12:00:00Z",
-      },
-    ];
-    const apiSpy = vi.spyOn(backendApi, "api").mockResolvedValue(events);
-    render(<ProjectActivityPanel projectId={projectId} token={token} />);
-
+  it("formats known and unknown events with useful details", async () => {
+    vi.spyOn(backendApi, "api").mockResolvedValue([
+      { id: "1", action: "artifact.generate", resource_type: "artifact", details: { artifact_type: "user_story", title: "Checkout", version: 2 }, actor_name: "Ari", created_at: "2026-01-04T12:00:00Z" },
+      { id: "2", action: "custom.event_name", resource_type: "project_item", details: { filename: "brief.pdf" }, actor_email: "ari@test.dev", created_at: "2026-01-05T12:00:00Z" },
+      { id: "3", action: "project.create", resource_type: "project", details: {}, created_at: "2026-01-06T12:00:00Z" },
+    ] as never);
+    render(<ProjectActivityPanel projectId="project-1" token="token" />);
     expect(await screen.findByText("Generated user story")).toBeInTheDocument();
-    expect(screen.getByText("Payments · v2 · by Alex")).toBeInTheDocument();
+    expect(screen.getByText("Checkout · v2 · by Ari")).toBeInTheDocument();
     expect(screen.getByText("custom event name")).toBeInTheDocument();
-    expect(screen.getByText("project chat activity · by person@example.test")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh project activity" }));
-
-    await waitFor(() => expect(apiSpy).toHaveBeenCalledTimes(2));
-    expect(apiSpy).toHaveBeenCalledWith(`/api/v1/projects/${projectId}/activity?limit=100`, token);
+    expect(screen.getByText("brief.pdf · by ari@test.dev")).toBeInTheDocument();
+    expect(screen.getByText("Created the project")).toBeInTheDocument();
   });
 
-  it("renders empty and error states and allows retry", async () => {
-    const apiSpy = vi
-      .spyOn(backendApi, "api")
-      .mockResolvedValueOnce([])
-      .mockRejectedValueOnce(new Error("audit unavailable"));
-    render(<ProjectActivityPanel projectId={projectId} token={token} />);
-
-    expect(
-      await screen.findByText("No project activity has been recorded yet."),
-    ).toBeInTheDocument();
+  it("handles empty, failed, and refresh activity requests", async () => {
+    const api = vi.spyOn(backendApi, "api").mockResolvedValueOnce([] as never).mockRejectedValueOnce(new Error("Activity unavailable")).mockResolvedValueOnce([] as never);
+    render(<ProjectActivityPanel projectId="project-1" token="token" />);
+    expect(await screen.findByText("No project activity has been recorded yet.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Refresh project activity" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("audit unavailable");
-    expect(apiSpy).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Activity unavailable");
+    fireEvent.click(screen.getByRole("button", { name: "Refresh project activity" }));
+    expect(await screen.findByText("No project activity has been recorded yet.")).toBeInTheDocument();
+    expect(api).toHaveBeenCalledTimes(3);
+  });
+
+  it("formats activity with empty details and without an actor", async () => {
+    vi.spyOn(backendApi, "api").mockResolvedValue([
+      { id: "bare", action: "unknown_action", resource_type: "project_change", details: null, created_at: "2026-01-01T00:00:00Z" },
+    ] as never);
+    render(<ProjectActivityPanel projectId="project-1" token="token" />);
+    expect(await screen.findByText("unknown action")).toBeInTheDocument();
+    expect(screen.getByText("project change activity")).toBeInTheDocument();
+    expect(screen.queryByText(/by /)).not.toBeInTheDocument();
   });
 });

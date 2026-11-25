@@ -20,6 +20,7 @@ from app.api.v1.projects import router as projects_router
 from app.api.v1.prompts import router as prompts_router
 from app.api.v1.requirements import router as requirements_router
 from app.api.v1.observability import router as observability_router
+from app.api.v1.tasks import router as tasks_router
 from app.api.v1.admin import router as admin_router
 from app.services.admin_bootstrap import ensure_bootstrap_admins
 
@@ -66,6 +67,7 @@ app.include_router(generate_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(prompts_router, prefix="/api/v1")
 app.include_router(observability_router, prefix="/api/v1")
+app.include_router(tasks_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
 
 

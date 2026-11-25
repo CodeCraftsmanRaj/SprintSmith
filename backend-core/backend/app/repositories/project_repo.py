@@ -51,6 +51,10 @@ class ProjectRepository(BaseRepository[Project]):
         )
         return list(self.db.scalars(stmt))
 
+    def get_invitation(self, invitation_id: str) -> ProjectInvitation | None:
+        """Look up an invitation by its own ID (rather than a project ID)."""
+        return self.db.get(ProjectInvitation, invitation_id)
+
     def get_invitation_by_hash(self, token_hash: str) -> ProjectInvitation | None:
         return self.db.scalar(
             select(ProjectInvitation).where(ProjectInvitation.token_hash == token_hash)
