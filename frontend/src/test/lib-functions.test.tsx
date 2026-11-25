@@ -196,14 +196,21 @@ describe("reportLovableError", () => {
     } as any);
     const response = new Response(null, { status: 404 });
     Object.defineProperty(response, "url", { value: "https://example.test/missing" });
+    const responseWithoutUrl = new Response(null, { status: 503 });
 
     reportLovableError(response);
+    reportLovableError(responseWithoutUrl);
     reportLovableError({ message: "database unavailable", code: "DB_DOWN" });
+    reportLovableError({ message: "" });
+    reportLovableError(undefined);
     reportLovableError("plain string failure");
 
     expect(reportRuntimeError.mock.calls.map(([payload]) => payload.message)).toEqual([
       "Response 404 at https://example.test/missing",
+      "Response 503",
       "database unavailable",
+      '{"message":""}',
+      "undefined",
       "plain string failure",
     ]);
     expect(reportRuntimeError.mock.calls[0][0]).toMatchObject({ filename: "/reports" });
