@@ -56,6 +56,12 @@ class ProjectRepository(BaseRepository[Project]):
             select(ProjectInvitation).where(ProjectInvitation.token_hash == token_hash)
         )
 
+    def get_invitation_by_id(self, invitation_id: str) -> ProjectInvitation | None:
+        return self.db.get(ProjectInvitation, invitation_id)
+        return self.db.scalar(
+            select(ProjectInvitation).where(ProjectInvitation.token_hash == token_hash)
+        )
+
     def get_invitation_for_email(self, project_id: str, email: str) -> ProjectInvitation | None:
         return self.db.scalar(
             select(ProjectInvitation).where(
