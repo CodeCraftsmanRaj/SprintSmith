@@ -37,6 +37,10 @@ Prerequisites: Docker running; `backend/.venv` and `ai-engine/.venv` installed (
 
 `app/services/ai_engine.py` uses async HTTP requests to `/health`, `/artifact-types`, `/generate`, `/generate/stream`, `/generate/compare`, `/ingest` (+`GET /ingest/{job_id}`) and `/evaluate/batch`. Generation runs the engine's LangGraph SOP swarm (retrieve → pm draft → qa judge, ≤2 revisions); results are validated and stored as artifacts with request ID, prompt version, usage, latency, requirement text — plus `eval_score`, `retry_count`, `model_used` and optional `requirement_id` provenance — in history and audit tables. Requirement uploads are capped at 10 MB, stored beneath `UPLOAD_DIR`, and their absolute path is sent to the engine's `/ingest` endpoint as an async job: the API returns 202 immediately and clients poll `GET /api/v1/ingest-jobs/{id}`, which persists tree nodes and chunk counts on the first terminal poll. This assumes both services can read the same upload directory (mount it into both containers when containerized — see root `docker-compose.yml`).
 
+## Langfuse monitoring
+
+The authenticated admin endpoint `GET /api/v1/observability/langfuse?days=7` reads recent generation observations from Langfuse for the in-app AI Monitoring dashboard. Configure `LANGFUSE_ENABLED=true`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL` in the server environment for both `backend-core` and `ai-engine`. The endpoint is admin-only because observations can contain full model inputs and outputs; Langfuse credentials never reach the browser. The dashboard supports 1, 7, or 30 day ranges and loads up to 5,000 newest generation observations.
+
 ## API overview
 
 - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`

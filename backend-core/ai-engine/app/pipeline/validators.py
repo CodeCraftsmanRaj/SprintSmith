@@ -25,13 +25,14 @@ class SchemaValidator:
 class LLMJudgeValidator:
     name = "llm_judge"
 
-    def __init__(self, threshold: float):
+    def __init__(self, threshold: float, config: dict | None = None):
         self.threshold = threshold
+        self.config = config
         self.score: float | None = None
 
     def validate(self, artifact: dict, requirement: str) -> tuple[bool, str]:
         from app.pipeline.sop_graph import judge_score
-        self.score, reason = judge_score(requirement, json.dumps(artifact))
+        self.score, reason = judge_score(requirement, json.dumps(artifact), config=self.config)
         return self.score >= self.threshold, reason
 
 

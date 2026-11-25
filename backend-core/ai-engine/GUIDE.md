@@ -76,7 +76,15 @@ RETRIEVAL_MODE=vector        # vector | hybrid (flip only after §2.3.6 ship run
 AI_ENGINE_PORT=8001
 LOG_LEVEL=INFO
 COLLECTION_NAME=sprintsmith_requirements
+
+# Optional Langfuse tracing (set true and supply both keys to enable)
+LANGFUSE_ENABLED=false
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
+
+When enabled, `/generate`, `/generate/stream`, and `/generate/compare` send generation traces to Langfuse. LangChain callbacks capture model calls, inputs/outputs, errors, and provider token usage; request, project, and artifact metadata are attached to the trace. The integration is optional and generation continues if credentials are absent or the SDK cannot initialize. Traces include prompt and generated content, so use a dedicated Langfuse project and avoid sending sensitive production data unless approved. For Compose, set the same variables in the repository-root `.env`, then rebuild the AI engine with `docker compose --profile core up -d --build ai-engine`. Inspect traces in the Langfuse dashboard; AI engine diagnostics are available with `docker compose --profile core logs -f ai-engine`.
 
 ---
 
