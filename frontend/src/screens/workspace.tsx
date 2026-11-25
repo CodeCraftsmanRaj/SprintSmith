@@ -4,7 +4,6 @@ import { api, apiUrl, type Artifact, type Project, type ProjectMonitoringDashboa
 import { GenerateArtifactModal, type ArtifactType } from "@/components/generate-artifact-modal";
 import { ProjectActivityPanel, ProjectCollaboration } from "@/components/ProjectCollaboration";
 import { LangfuseMonitoring } from "@/components/LangfuseMonitoring";
-import { AdminDashboard } from "@/components/AdminDashboard";
 
 const tokenKey = "sprintsmith_access_token";
 const navItems = [
@@ -13,7 +12,6 @@ const navItems = [
   { id: "artifacts", label: "Artifacts", icon: Layers3 },
   { id: "activity", label: "Activity", icon: Activity },
   { id: "team", label: "Team", icon: Users },
-  { id: "admin", label: "Admin panel", icon: ShieldCheck },
   { id: "monitoring", label: "AI Monitoring", icon: Activity },
 ] as const;
 type Page = (typeof navItems)[number]["id"];
@@ -54,7 +52,6 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
-  const [authRole, setAuthRole] = useState<"user" | "admin">("user");
   const [showCreate, setShowCreate] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
@@ -132,7 +129,7 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
   }, [token, inviteToken, loadWorkspace]);
 
   useEffect(() => {
-    if (user && user.role.toLowerCase() !== "admin" && (page === "monitoring" || page === "admin")) setPage("overview");
+    if (user && user.role.toLowerCase() !== "admin" && page === "monitoring") setPage("overview");
   }, [page, user]);
 
   function signOut() {
@@ -153,18 +150,12 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     const form = new FormData(event.currentTarget);
-    let email = String(form.get("email") || "").trim(); const password = String(form.get("password") || "");
+    const email = String(form.get("email") || ""); const password = String(form.get("password") || "");
     try {
-      if (authRole === "admin" && authMode === "register") throw new Error("Admin accounts are provisioned by the server administrator.");
-      if (authRole === "admin" && !email.includes("@")) email = `${email.toLowerCase()}@sprintsmith.local`;
       if (authMode === "register") {
         await api<User>("/api/v1/auth/register", undefined, { method: "POST", body: JSON.stringify({ email, password, full_name: form.get("full_name") }) });
       }
       const result = await api<{ access_token: string }>("/api/v1/auth/login", undefined, { method: "POST", body: JSON.stringify({ email, password }) });
-      const signedInUser = await api<User>("/api/v1/auth/me", result.access_token);
-      if (authRole === "admin" && signedInUser.role.toLowerCase() !== "admin") {
-        throw new Error("This account does not have platform administrator access.");
-      }
       localStorage.setItem(tokenKey, result.access_token); onTokenChange?.(result.access_token); setToken(result.access_token);
     } catch (e) { setError(e instanceof Error ? e.message : "Sign in failed"); }
     finally { setBusy(false); }
@@ -242,7 +233,7 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
   const canEditProject = projectRole !== "viewer";
   const formatDate = (value: string) => new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
-  if (!token) return <AuthScreen mode={authMode} setMode={setAuthMode} authRole={authRole} setAuthRole={(value) => { setAuthRole(value); if (value === "admin") setAuthMode("login"); }} onSubmit={handleAuth} busy={busy} error={error} invited={Boolean(inviteToken)} />;
+  if (!token) return <AuthScreen mode={authMode} setMode={setAuthMode} onSubmit={handleAuth} busy={busy} error={error} invited={Boolean(inviteToken)} />;
 
   return <div className="app-shell">
     <aside className="sidebar">
@@ -251,7 +242,7 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
       <button className="project-switcher" onClick={() => setShowCreate(true)}><span className="project-icon"><FolderKanban size={16} /></span><span className="project-current">{project?.name ?? "Select a project"}<small>{project ? "Project workspace" : "Get started"}</small></span><ChevronDown size={15} /></button>
       {project && <div className="project-list">{projects.map((item) => <button key={item.id} className={`project-option ${item.id === project.id ? "active" : ""}`} onClick={() => chooseProject(item.id)}><span className="project-dot" />{item.name}</button>)}</div>}
       <div className="sidebar-label nav-caption">PROJECT</div>
-      <nav className="side-nav">{navItems.filter(({ id }) => (id !== "monitoring" && id !== "admin") || user?.role.toLowerCase() === "admin").map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setPage(id)} className={`nav-item ${page === id ? "selected" : ""}`}><Icon size={17} strokeWidth={1.8} /><span>{label}</span>{id === "requirements" && requirements.length > 0 && <span className="nav-count">{requirements.length}</span>}</button>)}</nav>
+      <nav className="side-nav">{navItems.filter(({ id }) => id !== "monitoring" || user?.role.toLowerCase() === "admin").map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setPage(id)} className={`nav-item ${page === id ? "selected" : ""}`}><Icon size={17} strokeWidth={1.8} /><span>{label}</span>{id === "requirements" && requirements.length > 0 && <span className="nav-count">{requirements.length}</span>}</button>)}</nav>
       <div className="sidebar-bottom"><div className="system-card"><span className="pulse-dot" /><div><b>API connected</b><small>{apiUrl.replace(/^https?:\/\//, "")}</small></div><Check size={14} /></div><button className="nav-item subtle"><Settings2 size={17} /><span>Settings</span></button><button className="nav-item subtle"><CircleHelp size={17} /><span>Help center</span></button><div className="user-card"><div className="avatar">{(user?.full_name || user?.email || "U").slice(0, 1).toUpperCase()}</div><div className="user-meta"><b>{user?.full_name ?? "Workspace member"}</b><small>{user?.role ?? "member"}</small></div><button className="icon-button" title="Sign out" onClick={signOut}><LogOut size={16} /></button></div></div>
     </aside>
     <main className="main-area">
@@ -259,8 +250,7 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
       <div className="content-wrap">
         {(error || notice) && <div className={`toast ${error ? "toast-error" : "toast-success"}`}><span>{error || notice}</span><button onClick={() => { setError(""); setNotice(""); }}><X size={15} /></button></div>}
         {!project ? <EmptyProjects onCreate={() => setShowCreate(true)} /> : <>
-          {page !== "monitoring" && page !== "admin" && <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> PROJECT CONSOLE</div><h1>{page === "overview" ? "Project overview" : page === "requirements" ? "Requirements" : page === "artifacts" ? "Generated artifacts" : page === "team" ? "Project team" : "Activity"}</h1><p>{page === "overview" ? "A clear view of your SDLC workspace and recent progress." : page === "requirements" ? "Manage source documents and turn them into structured engineering outputs." : page === "artifacts" ? "Review and explore AI generated project deliverables." : page === "team" ? "Invite collaborators and manage project access." : "A timeline of work across this project."}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={refresh}><RefreshCw size={15} /> Refresh</button>{canEditProject && <button className="button button-primary" onClick={() => setPage("requirements")}><Plus size={16} /> Add requirement</button>}</div></section>}
-          {page === "admin" && user?.role.toLowerCase() === "admin" && <AdminDashboard token={token} />}
+          {page !== "monitoring" && <section className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> PROJECT CONSOLE</div><h1>{page === "overview" ? "Project overview" : page === "requirements" ? "Requirements" : page === "artifacts" ? "Generated artifacts" : page === "team" ? "Project team" : "Activity"}</h1><p>{page === "overview" ? "A clear view of your SDLC workspace and recent progress." : page === "requirements" ? "Manage source documents and turn them into structured engineering outputs." : page === "artifacts" ? "Review and explore AI generated project deliverables." : page === "team" ? "Invite collaborators and manage project access." : "A timeline of work across this project."}</p></div><div className="heading-actions"><button className="button button-quiet" onClick={refresh}><RefreshCw size={15} /> Refresh</button>{canEditProject && <button className="button button-primary" onClick={() => setPage("requirements")}><Plus size={16} /> Add requirement</button>}</div></section>}
           {page === "monitoring" && user?.role.toLowerCase() === "admin" && <LangfuseMonitoring token={token} />}
           {page === "overview" && <>
             <div className="metric-grid"><Metric label="Requirements" value={requirements.length} helper="Source documents" icon={FileText} color="amber" /><Metric label="Artifacts" value={artifacts.length} helper="Generated outputs" icon={Layers3} color="purple" /><Metric label="Project health" value={requirements.length ? "Active" : "Ready"} helper={requirements.length ? "Pipeline operational" : "Awaiting first input"} icon={ShieldCheck} color="green" /><Metric label="Last updated" value={artifacts[0] ? formatDate(artifacts[0].created_at) : "â€”"} helper="Most recent artifact" icon={Clock3} color="blue" /></div>
@@ -304,39 +294,8 @@ export function Workspace({ onTokenChange }: { onTokenChange?: (token: string) =
   </div>;
 }
 
-function AuthScreen({ mode, setMode, authRole, setAuthRole, onSubmit, busy, error, invited }: {
-  mode: "login" | "register";
-  setMode: (value: "login" | "register") => void;
-  authRole: "user" | "admin";
-  setAuthRole: (value: "user" | "admin") => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  busy: boolean;
-  error: string;
-  invited: boolean;
-}) {
-  return <div className="auth-screen"><div className="auth-glow" /><div className="auth-card">
-    <a href="/" className="brand auth-brand"><span className="brand-mark"><Command size={18} /></span><span>SprintSmith</span></a>
-    <div className="auth-eyebrow"><span className="pulse-dot" /> ENGINEERING WORKSPACE</div>
-    <div className="auth-role-switch" role="group" aria-label="Sign-in type">
-      <button type="button" aria-pressed={authRole === "user"} className={authRole === "user" ? "selected" : ""} onClick={() => setAuthRole("user")}>User login</button>
-      <button type="button" aria-pressed={authRole === "admin"} className={authRole === "admin" ? "selected" : ""} onClick={() => setAuthRole("admin")}>Admin login</button>
-    </div>
-    <h1>{authRole === "admin" ? "Administrator sign in" : mode === "login" ? "Welcome back" : "Create your workspace"}</h1>
-    <p>{authRole === "admin" ? "Sign in with a provisioned platform administrator account." : mode === "login" ? "Sign in to continue to your project console." : "Create an account to start organizing your SDLC."}</p>
-    {invited && <div className="invitation-auth-note"><Users size={15} /><span>You’ve been invited to collaborate. Sign in or create an account with the invited email to join the project.</span></div>}
-    {authRole === "admin" && <p className="panel-copy">Admin usernames: sayali, raj, srushti, rasika, prathamesh, devansh</p>}
-    {error && <div className="auth-error">{error}</div>}
-    <form className="stack-form auth-form" onSubmit={onSubmit}>
-      {mode === "register" && authRole === "user" && <><label className="field-label" htmlFor="full-name">Full name</label><input className="text-input" id="full-name" name="full_name" autoComplete="name" required minLength={1} placeholder="Your name" /></>}
-      <label className="field-label" htmlFor="email">{authRole === "admin" ? "Admin username or email" : "Email address"}</label>
-      <input className="text-input" id="email" type={authRole === "admin" ? "text" : "email"} name="email" autoComplete="username" required placeholder={authRole === "admin" ? "sayali" : "you@company.com"} />
-      <label className="field-label" htmlFor="password">Password</label>
-      <input className="text-input" id="password" type="password" name="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={authRole === "admin" ? 7 : 8} required placeholder={authRole === "admin" ? "Admin password" : "At least 8 characters"} />
-      <button type="submit" className="button button-primary full-button" disabled={busy}>{busy ? "Connecting..." : mode === "login" ? "Sign in" : "Create account"}<ArrowRight size={16} /></button>
-    </form>
-    {authRole === "user" && <div className="auth-switch">{mode === "login" ? "New to SprintSmith?" : "Already have an account?"}<button onClick={() => setMode(mode === "login" ? "register" : "login")}>{mode === "login" ? "Create account" : "Sign in"}</button></div>}
-    <div className="auth-api"><span className="pulse-dot" /> Connecting to <code>{apiUrl}</code></div>
-  </div><div className="auth-foot">BUILT FOR THE WORK BEHIND GREAT SOFTWARE</div></div>;
+function AuthScreen({ mode, setMode, onSubmit, busy, error, invited }: { mode: "login" | "register"; setMode: (value: "login" | "register") => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; busy: boolean; error: string; invited: boolean }) {
+  return <div className="auth-screen"><div className="auth-glow" /><div className="auth-card"><a href="/" className="brand auth-brand"><span className="brand-mark"><Command size={18} /></span><span>SprintSmith</span></a><div className="auth-eyebrow"><span className="pulse-dot" /> ENGINEERING WORKSPACE</div><h1>{mode === "login" ? "Welcome back" : "Create your workspace"}</h1><p>{mode === "login" ? "Sign in to continue to your project console." : "Create an account to start organizing your SDLC."}</p>{invited && <div className="invitation-auth-note"><Users size={15} /><span>You’ve been invited to collaborate. Sign in or create an account with the invited email to join the project.</span></div>}{error && <div className="auth-error">{error}</div>}<form className="stack-form auth-form" onSubmit={onSubmit}>{mode === "register" && <><label className="field-label" htmlFor="full-name">Full name</label><input className="text-input" id="full-name" name="full_name" autoComplete="name" required minLength={1} placeholder="Your name" /></>}<label className="field-label" htmlFor="email">Email address</label><input className="text-input" id="email" type="email" name="email" autoComplete="email" required placeholder="you@company.com" /><label className="field-label" htmlFor="password">Password</label><input className="text-input" id="password" type="password" name="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={8} required placeholder="At least 8 characters" /><button type="submit" className="button button-primary full-button" disabled={busy}>{busy ? "Connecting..." : mode === "login" ? "Sign in" : "Create account"}<ArrowRight size={16} /></button></form><div className="auth-switch">{mode === "login" ? "New to SprintSmith?" : "Already have an account?"}<button onClick={() => setMode(mode === "login" ? "register" : "login")}>{mode === "login" ? "Create account" : "Sign in"}</button></div><div className="auth-api"><span className="pulse-dot" /> Connecting to <code>{apiUrl}</code></div></div><div className="auth-foot">BUILT FOR THE WORK BEHIND GREAT SOFTWARE</div></div>;
 }
 
 function Metric({ label, value, helper, icon: Icon, color }: { label: string; value: string | number; helper: string; icon: typeof FileText; color: string }) {

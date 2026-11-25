@@ -2,6 +2,11 @@
 set -euo pipefail
 export CLOUDSDK_CORE_DISABLE_PROMPTS=1
 
+# Use project from workflow environment variable (set in deploy.yml)
+export GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT:-major-project-512815}"
+gcloud config set project "$GOOGLE_CLOUD_PROJECT" >/dev/null 2>&1
+gcloud config set disable_usage_reporting true >/dev/null 2>&1
+
 PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
 REGION="${GCP_REGION:-us-central1}"
 ZONE="${GCP_ZONE:-us-central1-a}"

@@ -60,6 +60,8 @@ jobs:
           project_id: major-project-512815
       - name: Build and deploy backend
         run: bash infra/deploy/deploy-gcp.sh
+        env:
+          GOOGLE_CLOUD_PROJECT: major-project-512815
 
   deploy-frontend:
     name: Deploy frontend to Cloudflare Workers
