@@ -58,27 +58,52 @@ async def upload_evaluation_baseline(
 ):
     """Upload a human baseline as JSON, YAML, Markdown, or plain text (up to 1 MB)."""
     suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in {".json", ".yaml", ".yml", ".md", ".txt"}:
+    if suffix not in {".json", ".yaml", ".yml", ".md", ".txt", ".pdf", ".docx"}:
         raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                            detail="Supported baseline formats are JSON, YAML, Markdown, and text")
+                            detail="Supported baseline formats are PDF, DOCX, JSON, YAML, Markdown, and text")
     raw = await file.read(1_000_001)
     if len(raw) > 1_000_000:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                             detail="Baseline file must be 1 MB or smaller")
     try:
-        text_content = raw.decode("utf-8")
+        if suffix == ".pdf":
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(raw), strict=False)
+            if len(reader.pages) > 200:
+                raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                                    detail="PDF baseline cannot exceed 200 pages")
+            extracted = "\n\n".join((page.extract_text() or "") for page in reader.pages).strip()
+            content = {"text": extracted}
+        elif suffix == ".docx":
+            with zipfile.ZipFile(io.BytesIO(raw)) as document_zip:
+                if sum(info.file_size for info in document_zip.infolist()) > 20_000_000:
+                    raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                                        detail="Expanded DOCX baseline cannot exceed 20 MB")
+            from docx import Document
+            document = Document(io.BytesIO(raw))
+            paragraphs = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
+            paragraphs.extend(" | ".join(cell.text.strip() for cell in row.cells)
+                              for table in document.tables for row in table.rows)
+            content = {"text": "\n".join(paragraphs).strip()}
+        else:
+            text_content = raw.decode("utf-8")
         if suffix == ".json":
             content = json.loads(text_content)
         elif suffix in {".yaml", ".yml"}:
             content = yaml.safe_load(text_content)
-        else:
+        elif suffix in {".md", ".txt"}:
             content = {"text": text_content}
-    except (UnicodeDecodeError, json.JSONDecodeError, yaml.YAMLError, ValueError) as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Baseline file must contain valid UTF-8 JSON, YAML, or text") from e
+                            detail="Baseline file could not be decoded; verify it is a valid supported document") from e
     if not isinstance(content, dict) or not content:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Structured baseline files must contain a non-empty object")
+    if not any(str(value).strip() for value in content.values()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Baseline file contains no extractable text")
     try:
         return artifact_service.create_baseline(project_id, {
             "artifact_type": artifact_type,

@@ -273,6 +273,8 @@ class ArtifactService:
         self.project_service.get_project_or_fail(project_id, user, write=True)
         if not payload.get("content"):
             raise ValidationError("Baseline content must not be empty")
+        if len(json.dumps(payload["content"], ensure_ascii=False).encode("utf-8")) > 1_000_000:
+            raise ValidationError("Baseline content must be 1 MB or smaller after extraction")
         baseline = EvaluationBaseline(
             id=self.artifact_repo.new_id(), project_id=project_id, uploaded_by=user.id,
             artifact_type=payload["artifact_type"], title=payload["title"].strip(),
