@@ -41,6 +41,18 @@ Prerequisites: Docker running; `backend/.venv` and `ai-engine/.venv` installed (
 
 The authenticated admin endpoint `GET /api/v1/observability/langfuse?days=7` reads recent generation observations from Langfuse for the in-app AI Monitoring dashboard. Configure `LANGFUSE_ENABLED=true`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL` in the server environment for both `backend-core` and `ai-engine`. The endpoint is admin-only because observations can contain full model inputs and outputs; Langfuse credentials never reach the browser. The dashboard supports 1, 7, or 30 day ranges and loads up to 5,000 newest generation observations.
 
+## Platform admin console
+
+The workspace has separate **User login** and **Admin login** modes. Admins can open **Admin panel** for platform user/project totals, a user directory, and collaborator counts by project; **AI Monitoring** opens the Langfuse dashboard. Both are restricted by the backend to users whose global `users.role` is `admin`.
+
+To provision the six demo operators for local use, put `BOOTSTRAP_ADMIN_ACCOUNTS_JSON` in `backend/.env` (or the backend deployment's secret configuration). Startup creates or promotes those accounts and stores password hashes. Use the usernames `sayali`, `raj`, `srushti`, `rasika`, `prathamesh`, and `devansh`; the login maps these to the matching `@sprintsmith.local` account. Keep the JSON and passwords out of Git; the tracked `.env.example` intentionally leaves it blank. Replace each example password with the value you want to use. Prefer stronger passwords for any shared or deployed environment:
+
+```dotenv
+BOOTSTRAP_ADMIN_ACCOUNTS_JSON='[{"email":"sayali@sprintsmith.local","full_name":"Sayali","password":"REPLACE_WITH_SECRET"},{"email":"raj@sprintsmith.local","full_name":"Raj","password":"REPLACE_WITH_SECRET"},{"email":"srushti@sprintsmith.local","full_name":"Srushti","password":"REPLACE_WITH_SECRET"},{"email":"rasika@sprintsmith.local","full_name":"Rasika","password":"REPLACE_WITH_SECRET"},{"email":"prathamesh@sprintsmith.local","full_name":"Prathamesh","password":"REPLACE_WITH_SECRET"},{"email":"devansh@sprintsmith.local","full_name":"Devansh","password":"REPLACE_WITH_SECRET"}]'
+```
+
+Restart the backend after setting it. Provisioning reapplies the configured admin role and password hash on every startup. `GET /api/v1/admin/overview` is the authenticated admin-only data endpoint.
+
 ## API overview
 
 - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
