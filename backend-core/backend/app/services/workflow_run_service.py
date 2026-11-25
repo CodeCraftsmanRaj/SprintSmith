@@ -75,6 +75,9 @@ class WorkflowRunService:
             error = json.dumps(detail, ensure_ascii=False) if isinstance(detail, dict) else str(exc)
             self.run_repo.update_run(run, status="failed", error_message=error,
                                      completed_at=datetime.now(timezone.utc))
+            if isinstance(detail, dict) and "error_class" in detail:
+                self.run_repo.save_artifact(run_id=run.id, artifact_type="llm_failure",
+                                            name=str(detail.get("agent") or "failed_node"), content=detail)
             self.run_repo.append_events(
                 run.id,
                 [
@@ -155,6 +158,9 @@ class WorkflowRunService:
             error = json.dumps(detail, ensure_ascii=False) if isinstance(detail, dict) else str(exc)
             self.run_repo.update_run(run, status="failed", error_message=error,
                                      completed_at=datetime.now(timezone.utc))
+            if isinstance(detail, dict) and "error_class" in detail:
+                self.run_repo.save_artifact(run_id=run.id, artifact_type="llm_failure",
+                                            name=str(detail.get("agent") or "failed_node"), content=detail)
             raise
         engine_result.setdefault("latency_ms", int((time.monotonic() - started_at_monotonic) * 1000))
         return self._persist_engine_result(run, engine_result)

@@ -17,7 +17,7 @@ from app.config import settings
 from app.pipeline import sop_graph
 from app.schemas.registry import SCHEMA_REGISTRY, get_schema
 from app.tracking.usage import record_request
-from app.pipeline.secret_scan import scan_for_secrets
+from app.pipeline.secret_scan import inspect_sensitive_text
 
 logger = logging.getLogger("sprintsmith.ai_engine")
 
@@ -57,9 +57,10 @@ def _checked_schema(artifact_type: str):
 
 
 def _reject_secrets(requirement_text: str) -> None:
-    findings = scan_for_secrets(requirement_text)
-    if findings:
-        raise HTTPException(status_code=422, detail={"message": "Requirement contains possible credentials; redact or rotate them before submission.", "findings": findings})
+    try:
+        inspect_sensitive_text(requirement_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _sse(payload) -> str:

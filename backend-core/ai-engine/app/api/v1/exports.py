@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.exporters.base import ExportConfigError, ExportResult, make_exporter
+from app.pipeline.secret_scan import inspect_sensitive_text
 
 router = APIRouter(tags=["Exporters"])
 
@@ -20,6 +21,7 @@ class ArtifactExportRequest(BaseModel):
 @router.post("/export", response_model=ExportResult)
 def export_artifact(req: ArtifactExportRequest):
     try:
+        inspect_sensitive_text(req.markdown)
         from app.exporters.base import ExportTarget
         target = ExportTarget.model_validate(req.target)
         exporter = make_exporter(target.backend)

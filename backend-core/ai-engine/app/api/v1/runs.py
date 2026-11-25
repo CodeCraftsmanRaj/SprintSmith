@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.pipeline.orchestrated_graph import resume_orchestrated_pipeline, run_orchestrated_pipeline
 from app.pipeline.llm_errors import LLMNodeFailure
-from app.pipeline.secret_scan import scan_for_secrets
+from app.pipeline.secret_scan import inspect_sensitive_text
 
 logger = logging.getLogger("sprintsmith.ai_engine.runs")
 
@@ -35,9 +35,10 @@ class RunResumeRequest(BaseModel):
 @router.post("/runs/start")
 def start_run(req: RunStartRequest) -> dict[str, Any]:
     run_id = req.run_id or f"run_{uuid.uuid4().hex}"
-    findings = scan_for_secrets(req.requirement_text)
-    if findings:
-        raise HTTPException(status_code=422, detail={"message": "Requirement contains possible credentials; redact or rotate them before submission.", "findings": findings})
+    try:
+        inspect_sensitive_text(req.requirement_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         return run_orchestrated_pipeline(
             run_id=run_id,

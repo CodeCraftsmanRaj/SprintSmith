@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from app.pipeline import llm_cache
-from app.pipeline.secret_scan import raise_if_secrets_found, scan_for_secrets
+from app.pipeline.secret_scan import raise_if_secrets_found, scan_for_secrets, scan_for_pii
 
 
 def test_prompt_cache_key_changes_when_prompt_hash_changes():
@@ -28,3 +28,9 @@ def test_secret_scanner_redacts_matches_and_raises():
         assert secret not in str(exc)
     else:
         raise AssertionError("Expected secret scan to reject the input")
+
+
+def test_pii_scanner_reports_categories_without_values():
+    findings = scan_for_pii("Contact alex@example.com or call 555-123-4567")
+    assert "email" in findings
+    assert all("alex" not in finding for finding in findings)
