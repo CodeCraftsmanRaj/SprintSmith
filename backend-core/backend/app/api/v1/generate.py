@@ -213,36 +213,64 @@ def traceability_matrix(
         select(GenerationHistory).where(GenerationHistory.project_id == project_id)
     ).all()
 
-    nodes = (
-        [
-            {
-                "id": f"req-{r.id}",
-                "type": "requirement",
-                "data": {"label": r.filename, "doc_type": r.doc_type},
-                "position": {"x": 0, "y": 0},
-            }
-            for r in requirements
-        ]
-        + [
-            {
-                "id": f"art-{a.id}",
-                "type": a.artifact_type,
-                "data": {"label": a.title, "version": a.version},
-                "position": {"x": 0, "y": 0},
-            }
-            for a in artifacts
-        ]
-    )
-    edges = [
-        {
-            "id": f"e-{h.requirement_id}-{h.artifact_id}",
-            "source": f"req-{h.requirement_id}",
-            "target": f"art-{h.artifact_id}",
-        }
-        for h in histories
-        if h.requirement_id
+    requirement_ids = {r.id for r in requirements}
+    linked_requirements: set[str] = set()
+    linked_artifacts: set[str] = set()
+    edges_by_id: dict[str, dict] = {}
+
+    for artifact in artifacts:
+        source_ids = set(artifact.source_requirement_ids or []) & requirement_ids
+        # Keep older artifacts traceable through generation history if their
+        # explicit source_requirement_ids were not populated.
+        if not source_ids:
+            source_ids = {h.requirement_id for h in histories
+                          if h.artifact_id == artifact.id and h.requirement_id in requirement_ids}
+        for requirement_id in source_ids:
+            linked_requirements.add(requirement_id)
+            linked_artifacts.add(artifact.id)
+            edge_id = f"req-{requirement_id}-art-{artifact.id}"
+            edges_by_id[edge_id] = {"id": edge_id, "source": f"req-{requirement_id}",
+                                    "target": f"art-{artifact.id}", "type": "requirement"}
+        for parent_id in artifact.parent_artifact_ids or []:
+            if parent_id in {item.id for item in artifacts}:
+                linked_artifacts.add(parent_id)
+                linked_artifacts.add(artifact.id)
+                edge_id = f"art-{parent_id}-art-{artifact.id}"
+                edges_by_id[edge_id] = {"id": edge_id, "source": f"art-{parent_id}",
+                                        "target": f"art-{artifact.id}", "type": "dependency"}
+
+    nodes = [
+        {"id": f"req-{requirement.id}", "type": "requirement",
+         "data": {"label": requirement.filename, "doc_type": requirement.doc_type,
+                  "review_status": requirement.review_status,
+                  "unlinked": requirement.id not in linked_requirements},
+         "position": {"x": 0, "y": 0}}
+        for requirement in requirements
+    ] + [
+        {"id": f"art-{artifact.id}", "type": artifact.artifact_type,
+         "data": {"label": artifact.title, "version": artifact.version,
+                  "status": artifact.status, "unlinked": artifact.id not in linked_artifacts},
+         "position": {"x": 0, "y": 0}}
+        for artifact in artifacts
     ]
-    return {"nodes": nodes, "edges": edges}
+    total_requirements = len(requirements)
+    total_artifacts = len(artifacts)
+    return {
+        "nodes": nodes,
+        "edges": list(edges_by_id.values()),
+        "coverage": {
+            "requirement_count": total_requirements,
+            "linked_requirement_count": len(linked_requirements),
+            "unlinked_requirement_ids": sorted(requirement_ids - linked_requirements),
+            "requirement_coverage": round(len(linked_requirements) / total_requirements, 4)
+            if total_requirements else 1.0,
+            "artifact_count": total_artifacts,
+            "linked_artifact_count": len(linked_artifacts),
+            "unlinked_artifact_ids": sorted({a.id for a in artifacts} - linked_artifacts),
+            "artifact_coverage": round(len(linked_artifacts) / total_artifacts, 4)
+            if total_artifacts else 1.0,
+        },
+    }
 
 
 @router.get("/artifacts/{artifact_id}/sprint-analysis")
