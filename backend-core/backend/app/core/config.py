@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     # ── Authentication ──────────────────────────────────────────────────────
     jwt_secret_key: str = "development-only-change-me"
     access_token_expire_minutes: int = 60
+    bootstrap_admin_accounts_json: str = ""
 
     # ── External Services ───────────────────────────────────────────────────
     ai_engine_url: str = "http://localhost:8001"
