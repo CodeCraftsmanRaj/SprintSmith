@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class ProjectCreate(BaseModel):
@@ -32,3 +34,16 @@ class ProjectMonitoringDashboard(BaseModel):
 class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     description: str | None = Field(default=None, max_length=10000)
+
+
+class ProjectInvitationCreate(BaseModel):
+    email: EmailStr
+    role: Literal["admin", "editor", "viewer"] = "viewer"
+
+
+class ProjectInvitationAccept(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+
+
+class ProjectMemberRoleUpdate(BaseModel):
+    role: Literal["admin", "editor", "viewer"]
