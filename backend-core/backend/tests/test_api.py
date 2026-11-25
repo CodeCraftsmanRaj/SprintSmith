@@ -1,4 +1,5 @@
 import pytest
+import uuid
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -7,7 +8,9 @@ from starlette.responses import Response
 from starlette.routing import Route
 
 from app.database import Base, get_db
+from app.domain.models import User
 from app.main import app
+from app.security import hash_password
 from app.services.ai_engine import AIEngineClient
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -37,15 +40,24 @@ def client():
 
 
 def auth(client):
-    client.post("/api/v1/auth/register", json={"email": "dev@example.com", "full_name": "Dev User", "password": "correct-horse-123"})
+    seed_user("dev@example.com", "correct-horse-123")
     response = client.post("/api/v1/auth/login", json={"email": "dev@example.com", "password": "correct-horse-123"})
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
+def seed_user(email, password):
+    """Seed an account directly as test setup; production accounts are admin-managed."""
+    db = TestingSession()
+    db.add(User(id=str(uuid.uuid4()), email=email, full_name="Test User",
+                password_hash=hash_password(password), role="member"))
+    db.commit()
+    db.close()
+
+
 def test_register_login_and_reject_bad_credentials(client):
     response = client.post("/api/v1/auth/register", json={"email": "dev@example.com", "full_name": "Dev", "password": "password123"})
-    assert response.status_code == 201
-    assert "password_hash" not in response.text
+    assert response.status_code == 404
+    seed_user("dev@example.com", "password123")
     assert client.post("/api/v1/auth/login", json={"email": "dev@example.com", "password": "wrong-password"}).status_code == 401
 
 
@@ -53,7 +65,7 @@ def test_project_access_and_artifact_editing(client):
     headers = auth(client)
     project = client.post("/api/v1/projects", json={"name": "Payments"}, headers=headers).json()
     assert client.get("/api/v1/projects", headers=headers).json()[0]["id"] == project["id"]
-    client.post("/api/v1/auth/register", json={"email": "other@example.com", "full_name": "Other", "password": "password123"})
+    seed_user("other@example.com", "password123")
     outsider_login = client.post("/api/v1/auth/login", json={"email": "other@example.com", "password": "password123"}).json()
     denied = client.get(f"/api/v1/projects/{project['id']}", headers={"Authorization": f"Bearer {outsider_login['access_token']}"})
     assert denied.status_code == 403

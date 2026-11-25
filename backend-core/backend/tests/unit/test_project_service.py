@@ -105,4 +105,4 @@ def test_add_member_with_valid_and_invalid_role(project_service, pm_user, dev_us
     # Invalid role rejection
     with pytest.raises(ValidationError) as exc_info:
         project_service.set_member(project.id, dev_user.email, "superadmin", pm_user)
-    assert "must be editor or viewer" in str(exc_info.value).lower()
+    assert "must be admin, editor, or viewer" in str(exc_info.value).lower()

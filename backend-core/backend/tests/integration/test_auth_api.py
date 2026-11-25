@@ -1,16 +1,18 @@
-"""
-Integration tests for Authentication API endpoints (/api/v1/auth/*).
-
-Verifies:
-- POST /api/v1/auth/register: 201 on success, 409 on duplicate email, 422 on invalid input
-- POST /api/v1/auth/login: 200 + JWT on valid credentials, 401 on wrong password or unknown user
-- GET /api/v1/auth/me: 200 with user profile on valid Bearer token, 401 on missing or tampered token
-"""
+"""Authentication API tests. Accounts are provisioned by administrators."""
 
 
-def test_register_success(client):
+def test_public_registration_is_disabled(client):
     response = client.post(
         "/api/v1/auth/register",
+        json={"email": "new.user@example.com", "full_name": "New User", "password": "SecurePassword123!"},
+    )
+    assert response.status_code == 404
+
+
+def test_admin_can_create_login_account(client, admin_headers):
+    response = client.post(
+        "/api/v1/admin/users",
+        headers=admin_headers,
         json={"email": "new.user@example.com", "full_name": "New User", "password": "SecurePassword123!"},
     )
     assert response.status_code == 201
@@ -20,35 +22,19 @@ def test_register_success(client):
     assert "password" not in data
     assert "password_hash" not in data
 
-
-def test_register_duplicate_email_returns_409(client):
-    payload = {"email": "duplicate@example.com", "full_name": "Original", "password": "Password123!"}
-    res1 = client.post("/api/v1/auth/register", json=payload)
-    assert res1.status_code == 201
-
-    res2 = client.post("/api/v1/auth/register", json=payload)
-    assert res2.status_code == 409
-    assert "already registered" in res2.json()["detail"].lower()
+    duplicate = client.post(
+        "/api/v1/admin/users",
+        headers=admin_headers,
+        json={"email": "new.user@example.com", "full_name": "Duplicate", "password": "SecurePassword123!"},
+    )
+    assert duplicate.status_code == 409
 
 
-def test_register_validation_errors(client):
-    # Invalid email
-    r1 = client.post("/api/v1/auth/register", json={"email": "bad-email", "full_name": "A", "password": "Password123!"})
-    assert r1.status_code == 422
-
-    # Blank full_name
-    r2 = client.post("/api/v1/auth/register", json={"email": "valid@example.com", "full_name": "   ", "password": "Password123!"})
-    assert r2.status_code == 422
-
-    # Short password
-    r3 = client.post("/api/v1/auth/register", json={"email": "valid@example.com", "full_name": "A", "password": "short"})
-    assert r3.status_code == 422
-
-
-def test_login_success_and_failures(client):
-    # Register user
+def test_login_success_and_failures(client, admin_headers):
+    # Account creation is restricted to administrators.
     client.post(
-        "/api/v1/auth/register",
+        "/api/v1/admin/users",
+        headers=admin_headers,
         json={"email": "login.test@example.com", "full_name": "User", "password": "CorrectPassword1!"},
     )
 
@@ -77,10 +63,11 @@ def test_login_success_and_failures(client):
     assert unknown.status_code == 401
 
 
-def test_auth_me_endpoint_security(client):
-    # Create user and login
-    reg = client.post(
-        "/api/v1/auth/register",
+def test_auth_me_endpoint_security(client, admin_headers):
+    # Create user through the supported admin flow and login.
+    client.post(
+        "/api/v1/admin/users",
+        headers=admin_headers,
         json={"email": "me.user@example.com", "full_name": "Me User", "password": "Password123!"},
     )
     token = client.post(

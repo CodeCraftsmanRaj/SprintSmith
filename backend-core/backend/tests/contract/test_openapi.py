@@ -19,7 +19,7 @@ def test_openapi_schema_generation(client):
 
     paths = schema["paths"]
     # Verify core endpoints exist
-    assert "/api/v1/auth/register" in paths
+    assert "/api/v1/auth/register" not in paths
     assert "/api/v1/auth/login" in paths
     assert "/api/v1/projects" in paths
     assert "/api/v1/artifacts/{artifact_id}/export" in paths
@@ -50,6 +50,6 @@ def test_openapi_schemas_components(client):
     schema = response.json()
     schemas = schema.get("components", {}).get("schemas", {})
 
-    expected_schemas = ["UserCreate", "UserOut", "ProjectCreate", "ProjectOut", "ArtifactOut"]
+    expected_schemas = ["AdminUserCreate", "UserOut", "ProjectCreate", "ProjectOut", "ArtifactOut"]
     for s in expected_schemas:
         assert s in schemas, f"Expected schema '{s}' to be documented in OpenAPI components"

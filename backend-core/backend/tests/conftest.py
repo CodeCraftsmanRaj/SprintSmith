@@ -233,17 +233,23 @@ def mock_ai_generate(monkeypatch):
     """Mocks AIEngineClient.generate to return standard structured SDLC artifacts,
     including the SOP telemetry fields (§3.2.2/§6.1)."""
     async def fake_generate(self, project_id, artifact_type, requirement_text):
+        output = (
+            {"endpoints": [{"method": "get", "path": "/health",
+                            "description": "Health check"}]}
+            if artifact_type == "api_spec"
+            else {
+                "title": f"Generated {artifact_type}",
+                "items": [
+                    {"id": "ITEM-1", "description": f"Specification for {requirement_text[:20]}"}
+                ],
+            }
+        )
         return {
             "request_id": "test-req-123",
             "project_id": project_id,
             "artifact_type": artifact_type,
             "prompt_version": f"{artifact_type}_v1",
-            "output": {
-                "title": f"Generated {artifact_type}",
-                "items": [
-                    {"id": "ITEM-1", "description": f"Specification for {requirement_text[:20]}"}
-                ],
-            },
+            "output": output,
             "usage": {"prompt_tokens": 50, "completion_tokens": 100, "total_tokens": 150},
             "latency_ms": 42,
             "eval_score": 0.91,

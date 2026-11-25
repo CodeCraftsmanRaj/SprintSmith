@@ -72,7 +72,8 @@ def test_case_study_generates_suite_and_links_requirement(client, dev_user, dev_
     db_session.commit()
 
     async def fake_generate(self, project_id, artifact_type, requirement_text):
-        return {"request_id": "case-study", "output": {"items": []}, "eval_score": 0.9,
+        output = {"endpoints": [{"method": "get", "path": "/health"}]} if artifact_type == "api_spec" else {"items": []}
+        return {"request_id": "case-study", "output": output, "eval_score": 0.9,
                 "retry_count": 0, "model_used": "groq-test", "usage": {"total_tokens": 3},
                 "latency_ms": 10, "prompt_version": f"{artifact_type}_v1"}
 

@@ -67,10 +67,10 @@ def test_generate_links_requirement_for_traceability(client, dev_headers, mock_a
     assert edge["target"] == f"art-{artifact_id}"
 
 
-def test_viewer_cannot_generate(client, dev_headers, mock_ai_ingest):
+def test_viewer_cannot_generate(client, dev_headers, admin_headers, mock_ai_ingest):
     project = _make_project(client, dev_headers)
-    viewer = client.post("/api/v1/auth/register",
-                         json={"email": "view@example.com", "full_name": "V", "password": "Passw0rd!"}).json()
+    client.post("/api/v1/admin/users", headers=admin_headers,
+                json={"email": "view@example.com", "full_name": "V", "password": "Passw0rd!"})
     client.post(f"/api/v1/projects/{project['id']}/members?email=view@example.com&role=viewer",
                 headers=dev_headers)
     token = client.post("/api/v1/auth/login",
