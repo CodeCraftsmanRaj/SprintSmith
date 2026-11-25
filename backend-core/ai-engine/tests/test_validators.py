@@ -1,3 +1,6 @@
+import sys
+from types import ModuleType
+
 from app.pipeline.validators import LLMJudgeValidator, SchemaValidator, ValidationChain
 
 
@@ -29,14 +32,15 @@ def test_schema_validator_returns_empty_reason_for_valid_schema(monkeypatch):
 
 
 def test_llm_judge_validator_forwards_config_and_tracks_score(monkeypatch):
-    import app.pipeline.sop_graph as sop_graph
-
     calls = []
-    monkeypatch.setattr(
+    sop_graph = ModuleType("app.pipeline.sop_graph")
+    sop_graph.judge_score = lambda requirement, artifact, config: calls.append(
+        (requirement, artifact, config)
+    ) or (0.85, "meets acceptance criteria")
+    monkeypatch.setitem(
+        sys.modules,
+        "app.pipeline.sop_graph",
         sop_graph,
-        "judge_score",
-        lambda requirement, artifact, config: calls.append((requirement, artifact, config))
-        or (0.85, "meets acceptance criteria"),
     )
     config = {"model": "judge-test"}
     validator = LLMJudgeValidator(threshold=0.8, config=config)
@@ -50,9 +54,9 @@ def test_llm_judge_validator_forwards_config_and_tracks_score(monkeypatch):
 
 
 def test_llm_judge_validator_fails_at_threshold_and_preserves_reason(monkeypatch):
-    import app.pipeline.sop_graph as sop_graph
-
-    monkeypatch.setattr(sop_graph, "judge_score", lambda *args, **kwargs: (0.4, "missing steps"))
+    sop_graph = ModuleType("app.pipeline.sop_graph")
+    sop_graph.judge_score = lambda *args, **kwargs: (0.4, "missing steps")
+    monkeypatch.setitem(sys.modules, "app.pipeline.sop_graph", sop_graph)
     validator = LLMJudgeValidator(threshold=0.5)
 
     assert validator.validate({}, "requirement") == (False, "missing steps")
