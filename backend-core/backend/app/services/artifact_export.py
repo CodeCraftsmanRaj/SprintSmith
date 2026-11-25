@@ -1,14 +1,16 @@
 import csv
 import io
 import json
+import re
 from collections.abc import Callable
+from xml.sax.saxutils import escape
 
 from fastapi import Response
 
 from app.domain.models import Artifact
 
 
-def _download(artifact: Artifact, extension: str, body: str, media_type: str) -> Response:
+def _download(artifact: Artifact, extension: str, body: str | bytes, media_type: str) -> Response:
     return Response(
         content=body,
         media_type=media_type,
@@ -133,6 +135,63 @@ def _export_yaml(artifact: Artifact) -> Response:
     return _download(artifact, "yaml", body, "application/x-yaml")
 
 
+def _export_pdf(artifact: Artifact) -> Response:
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+    buffer = io.BytesIO()
+    font_name = "Helvetica"
+    try:
+        import reportlab
+        vera_font = __import__("os").path.join(__import__("os").path.dirname(reportlab.__file__),
+                                                "fonts", "Vera.ttf")
+        pdfmetrics.registerFont(TTFont("SprintSmithVera", vera_font))
+        font_name = "SprintSmithVera"
+    except (OSError, ValueError):
+        pass
+
+    doc = SimpleDocTemplate(buffer, pagesize=A4, title=artifact.title,
+                            leftMargin=20 * mm, rightMargin=20 * mm,
+                            topMargin=18 * mm, bottomMargin=18 * mm)
+    styles = getSampleStyleSheet()
+    body_style = ParagraphStyle("ArtifactBody", parent=styles["BodyText"],
+                                fontName=font_name, fontSize=9, leading=13,
+                                textColor=colors.HexColor("#202124"), alignment=TA_LEFT,
+                                wordWrap="CJK")
+    heading_style = ParagraphStyle("ArtifactHeading", parent=styles["Heading2"],
+                                   fontName=font_name, textColor=colors.HexColor("#174EA6"),
+                                   spaceBefore=7, spaceAfter=4)
+    title_style = ParagraphStyle("ArtifactTitle", parent=styles["Title"], fontName=font_name,
+                                 textColor=colors.HexColor("#174EA6"))
+    content = artifact.content or {}
+    rendered = content.get("rendered_markdown") or content.get("markdown")
+    if not rendered:
+        rendered = json.dumps(content, ensure_ascii=False, indent=2)
+    story = [Paragraph(escape(artifact.title or artifact.artifact_type), title_style), Spacer(1, 8)]
+    for line in str(rendered).splitlines():
+        clean = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", line).strip()
+        if not clean:
+            story.append(Spacer(1, 4))
+            continue
+        heading = re.match(r"^#{1,6}\s+(.*)$", clean)
+        if heading:
+            story.append(Paragraph(escape(heading.group(1)), heading_style))
+            continue
+        clean = re.sub(r"^\s*[-*+]\s+", "• ", clean)
+        clean = re.sub(r"^\s*\d+[.)]\s+", "• ", clean)
+        clean = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", escape(clean))
+        clean = re.sub(r"`([^`]+)`", r"<font name='Courier'>\1</font>", clean)
+        story.append(Paragraph(clean, body_style))
+    doc.build(story)
+    return _download(artifact, "pdf", buffer.getvalue(), "application/pdf")
+
+
 def _export_gherkin(artifact: Artifact) -> Response:
     lines = [f"Feature: {artifact.title or 'Generated Acceptance Criteria'}", ""]
     for index, criterion in enumerate(artifact.content.get("criteria", []), start=1):
@@ -158,6 +217,7 @@ _EXPORTERS: dict[str, Callable[[Artifact], Response]] = {
     "csv": _export_csv,
     "yaml": _export_yaml,
     "yml": _export_yaml,
+    "pdf": _export_pdf,
 }
 
 

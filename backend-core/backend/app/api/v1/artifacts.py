@@ -317,7 +317,7 @@ def artifact_evaluations(
 @router.get("/artifacts/{artifact_id}/export")
 def export_artifact(
     artifact_id: str,
-    format: str = Query("json", pattern="^(?i)(json|markdown|md|csv|yaml|yml|gherkin)$"),
+    format: str = Query("json", pattern="^(?i)(json|markdown|md|csv|yaml|yml|gherkin|pdf)$"),
     artifact_service: ArtifactService = Depends(get_artifact_service),
     user: User = Depends(get_current_user),
 ):
@@ -396,6 +396,7 @@ async def export_backlog_artifact(
 @router.get("/projects/{project_id}/artifacts/export.zip")
 def export_project_artifacts_zip(
     project_id: str,
+    format: str = Query("json", pattern="^(?i)(json|markdown|md|csv|yaml|yml|pdf)$"),
     artifact_service: ArtifactService = Depends(get_artifact_service),
     user: User = Depends(get_current_user),
 ):
@@ -406,13 +407,13 @@ def export_project_artifacts_zip(
     except AuthorisationError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     buffer = io.BytesIO()
+    extension = {"markdown": "md", "yml": "yaml"}.get(format.lower(), format.lower())
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for artifact in artifacts:
-            filename = f"{artifact.artifact_type}-{artifact.id}.json"
-            archive.writestr(filename, json.dumps({
-                "id": artifact.id, "project_id": artifact.project_id,
-                "artifact_type": artifact.artifact_type, "title": artifact.title,
-                "version": artifact.version, "content": artifact.content,
-            }, indent=2))
+            rendered = render_artifact_export(artifact, format)
+            if rendered is None:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                    detail=f"Format {format} is unsupported for artifact {artifact.id}")
+            archive.writestr(f"{artifact.artifact_type}-{artifact.id}.{extension}", rendered.body)
     return Response(content=buffer.getvalue(), media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="project-{project_id}-artifacts.zip"'})
