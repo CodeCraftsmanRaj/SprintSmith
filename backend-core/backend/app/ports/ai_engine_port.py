@@ -27,3 +27,10 @@ class AIEnginePort(ABC):
     @abstractmethod
     async def evaluate_batch(self, project_id: str | None = None,
                              retrieval_mode: str = "vector") -> dict: ...
+
+    @abstractmethod
+    async def start_orchestrated_run(self, run_id: str, project_id: str, requirement_text: str,
+                                     artifact_type: str = "user_story") -> dict: ...
+
+    @abstractmethod
+    async def resume_orchestrated_run(self, checkpoint: dict, resume_payload: dict) -> dict: ...

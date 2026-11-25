@@ -148,3 +148,31 @@ class AIEngineClient(AIEnginePort):
         if project_id:
             params["project_id"] = project_id
         return await self._request("POST", "/evaluate/batch", params=params)
+
+    async def start_orchestrated_run(
+        self,
+        run_id: str,
+        project_id: str,
+        requirement_text: str,
+        artifact_type: str = "user_story",
+    ) -> dict:
+        return await self._request(
+            "POST",
+            "/runs/start",
+            json={
+                "run_id": run_id,
+                "project_id": project_id,
+                "requirement_text": requirement_text,
+                "artifact_type": artifact_type,
+            },
+        )
+
+    async def resume_orchestrated_run(self, checkpoint: dict, resume_payload: dict) -> dict:
+        return await self._request(
+            "POST",
+            "/runs/resume",
+            json={
+                "checkpoint": checkpoint,
+                "resume_payload": resume_payload,
+            },
+        )

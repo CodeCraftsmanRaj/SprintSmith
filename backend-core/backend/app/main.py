@@ -19,6 +19,7 @@ from app.api.v1.health import router as health_router
 from app.api.v1.projects import router as projects_router
 from app.api.v1.prompts import router as prompts_router
 from app.api.v1.requirements import router as requirements_router
+from app.api.v1.runs import router as runs_router
 
 logging.basicConfig(level=settings.log_level.upper())
 logger = logging.getLogger("sprintsmith.backend")
@@ -62,6 +63,7 @@ app.include_router(artifacts_router, prefix="/api/v1")
 app.include_router(generate_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(prompts_router, prefix="/api/v1")
+app.include_router(runs_router, prefix="/api/v1")
 
 # Rate limiting (must be defined before middleware registration)
 _rate_windows: dict[tuple[str, str], deque[float]] = {}

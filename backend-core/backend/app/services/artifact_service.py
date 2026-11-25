@@ -5,6 +5,8 @@ Artifact generation, update, export, and evaluation business logic.
 import json
 import uuid
 
+from sqlalchemy import select
+
 from app.core.exceptions import ResourceNotFoundError, ValidationError
 from app.domain.models import Artifact, Evaluation, GenerationHistory, User
 from app.repositories.artifact_repo import ArtifactRepository
@@ -118,6 +120,13 @@ class ArtifactService:
             if value is not None:
                 setattr(artifact, key, value)
         artifact.version += 1
+
+        # Any artifact that explicitly depends on this artifact is now stale.
+        db = self.artifact_repo.db
+        dependents = db.scalars(select(Artifact).where(Artifact.project_id == artifact.project_id)).all()
+        for dependent in dependents:
+            if artifact.id in (dependent.parent_artifact_ids or []):
+                dependent.is_stale = True
 
         self.audit_repo.record(
             user.id, "artifact.update", "artifact", artifact.id, {"version": artifact.version}

@@ -116,6 +116,11 @@ class Artifact(Base):
     artifact_type: Mapped[str] = mapped_column(String(80), index=True)
     title: Mapped[str] = mapped_column(String(255), default="Generated artifact")
     content: Mapped[dict] = mapped_column(JSON)
+    parent_artifact_ids: Mapped[list] = mapped_column(JSON, default=list)
+    source_requirement_ids: Mapped[list] = mapped_column(JSON, default=list)
+    generation_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    approval_status: Mapped[str] = mapped_column(String(32), default="approved")
+    is_stale: Mapped[bool] = mapped_column(Boolean, default=False)
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
@@ -199,4 +204,56 @@ class AuditLog(Base):
     resource_type: Mapped[str] = mapped_column(String(80))
     resource_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     details: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+
+
+# ── Orchestrated Workflow Runs (DevAgent-Studio pattern) ──────────────────────
+
+
+class WorkflowRun(Base):
+    __tablename__ = "workflow_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey(PROJECTS_ID_FK, ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey(USERS_ID_FK))
+    requirement_id: Mapped[str | None] = mapped_column(
+        ForeignKey("requirements.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    artifact_type: Mapped[str] = mapped_column(String(80), default="user_story")
+    goal: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default="created", index=True)
+    current_node: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    final_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    paused_node_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    checkpoint: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    human_review_packet: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    final_artifact: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, onupdate=_now_utc)
+
+
+class RunEvent(Base):
+    __tablename__ = "run_events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("workflow_runs.id", ondelete="CASCADE"), index=True)
+    node_id: Mapped[str] = mapped_column(String(80))
+    agent: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(32))
+    content: Mapped[str] = mapped_column(Text, default="")
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc, index=True)
+
+
+class RunArtifact(Base):
+    __tablename__ = "run_artifacts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("workflow_runs.id", ondelete="CASCADE"), index=True)
+    artifact_type: Mapped[str] = mapped_column(String(80))
+    name: Mapped[str] = mapped_column(String(120))
+    content: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now_utc)

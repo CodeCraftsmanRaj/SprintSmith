@@ -12,6 +12,7 @@ from app.api.v1.generate import router as generate_router
 from app.api.v1.health import router as health_router
 from app.api.v1.ingest import router as ingest_router
 from app.api.v1.prompts import router as prompts_router
+from app.api.v1.runs import router as runs_router
 from app.config import settings
 
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -28,3 +29,4 @@ app.include_router(health_router)
 app.include_router(ingest_router)
 app.include_router(generate_router)
 app.include_router(prompts_router)
+app.include_router(runs_router)
