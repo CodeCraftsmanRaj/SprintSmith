@@ -18,6 +18,7 @@ class GenerateRequest(BaseModel):
 
 
 class ArtifactUpdate(BaseModel):
+    expected_version: int | None = Field(default=None, ge=1)
     title: str | None = Field(default=None, max_length=255)
     content: dict[str, Any] | None = None
     status: str | None = Field(default=None, pattern="^(backlog|todo|in_progress|in_review|blocked|done)$")

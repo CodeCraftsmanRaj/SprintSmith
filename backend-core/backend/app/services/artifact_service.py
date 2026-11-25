@@ -8,8 +8,9 @@ import re
 from difflib import SequenceMatcher
 
 from sqlalchemy import select
+from sqlalchemy.orm.exc import StaleDataError
 
-from app.core.exceptions import ResourceNotFoundError, ValidationError
+from app.core.exceptions import ConflictError, ResourceNotFoundError, ValidationError
 from app.domain.models import (Artifact, ArtifactStatusHistory, BaselineComparison, Evaluation,
                                EvaluationBaseline, GenerationHistory, User)
 from app.repositories.artifact_repo import ArtifactRepository
@@ -127,6 +128,10 @@ class ArtifactService:
     def update(self, artifact_id: str, updates: dict, user: User) -> Artifact:
         artifact = self._get_artifact_or_fail(artifact_id)
         self.project_service.get_project_or_fail(artifact.project_id, user, write=True)
+        updates = dict(updates)
+        expected_version = updates.pop("expected_version", None)
+        if expected_version is not None and expected_version != artifact.version:
+            raise ConflictError(f"Artifact has changed; current version is {artifact.version}")
 
         if "assigned_to" in updates and updates["assigned_to"] is not None:
             assignee = self.artifact_repo.db.get(User, updates["assigned_to"])
@@ -160,7 +165,6 @@ class ArtifactService:
         for key, value in updates.items():
             if value is not None or key in {"assigned_to", "category"}:
                 setattr(artifact, key, value)
-        artifact.version += 1
         if "status" in updates and updates["status"] != previous_status:
             self.artifact_repo.db.add(ArtifactStatusHistory(
                 id=self.artifact_repo.new_id(), artifact_id=artifact.id, changed_by=user.id,
@@ -169,7 +173,13 @@ class ArtifactService:
 
         # Any artifact that explicitly depends on this artifact is now stale.
         db = self.artifact_repo.db
-        dependents = db.scalars(select(Artifact).where(Artifact.project_id == artifact.project_id)).all()
+        try:
+            dependents = db.scalars(select(Artifact).where(
+                Artifact.project_id == artifact.project_id
+            )).all()
+        except StaleDataError as exc:
+            self.artifact_repo.rollback()
+            raise ConflictError("Artifact was updated by another user; reload and retry") from exc
         for dependent in dependents:
             if artifact.id in (dependent.parent_artifact_ids or []):
                 dependent.is_stale = True
@@ -177,7 +187,11 @@ class ArtifactService:
         self.audit_repo.record(
             user.id, "artifact.update", "artifact", artifact.id, {"version": artifact.version}
         )
-        self.artifact_repo.commit()
+        try:
+            self.artifact_repo.commit()
+        except StaleDataError as exc:
+            self.artifact_repo.rollback()
+            raise ConflictError("Artifact was updated by another user; reload and retry") from exc
         return self.artifact_repo.refresh(artifact)
 
     def list_status_history(self, artifact_id: str, user: User) -> list[dict]:
