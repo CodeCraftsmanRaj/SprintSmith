@@ -43,6 +43,9 @@ def test_generate_links_requirement_for_traceability(client, dev_headers, mock_a
     upload = client.post(f"/api/v1/projects/{project['id']}/requirements", files=files,
                          headers=dev_headers).json()
     client.get(f"/api/v1/ingest-jobs/{upload['ingest_job_id']}", headers=dev_headers)
+    reviewed = client.post(f"/api/v1/requirements/{upload['id']}/review",
+                           json={"decision": "approved"}, headers=dev_headers)
+    assert reviewed.status_code == 200
 
     res = client.post(f"/api/v1/projects/{project['id']}/generate",
                       json={"artifact_type": "user_story", "requirement_text": "reset password",

@@ -61,6 +61,7 @@ async def generate(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except AuthorisationError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
@@ -166,6 +167,14 @@ def export_artifact(
     except AuthorisationError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
+    response = render_artifact_export(artifact, format)
+    if response is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Gherkin export is only supported for acceptance_criteria artifacts",
+        )
+    return response
+
 
 @router.post("/artifacts/{artifact_id}/export/backlog")
 async def export_backlog_artifact(
@@ -191,14 +200,6 @@ async def export_backlog_artifact(
         )
     except HTTPException:
         raise
-
-    response = render_artifact_export(artifact, format)
-    if response is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Gherkin export is only supported for acceptance_criteria artifacts",
-        )
-    return response
 
 
 @router.get("/projects/{project_id}/artifacts/export.zip")
