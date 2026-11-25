@@ -55,8 +55,27 @@ def test_empty_bootstrap_setting_is_a_no_op(monkeypatch):
     '[{"email":"a@example.com","full_name":"A","password":"short"}]',
     '[{"email":"a@example.com","full_name":"A","password":"long-enough-password"},'
     '{"email":"a@example.com","full_name":"B","password":"long-enough-password"}]',
+    '[42]',
+    '["not-a-dict"]',
 ])
 def test_bootstrap_rejects_invalid_configuration(raw, monkeypatch):
     monkeypatch.setattr(admin_bootstrap.settings, "bootstrap_admin_accounts_json", raw)
     with pytest.raises(ValueError):
+        admin_bootstrap.ensure_bootstrap_admins()
+
+
+def test_bootstrap_repository_error_rolls_back_and_raises(monkeypatch, db_session):
+    monkeypatch.setattr(admin_bootstrap, "SessionLocal", sessionmaker(bind=db_session.get_bind()))
+    accounts = [{"email": "a@example.com", "full_name": "A", "password": "long-enough-password"}]
+    monkeypatch.setattr(admin_bootstrap.settings, "bootstrap_admin_accounts_json", json.dumps(accounts))
+
+    class BoomRepo:
+        def __init__(self, db):
+            pass
+
+        def get_by_email(self, email):
+            raise RuntimeError("db is down")
+
+    monkeypatch.setattr(admin_bootstrap, "UserRepository", BoomRepo)
+    with pytest.raises(RuntimeError, match="db is down"):
         admin_bootstrap.ensure_bootstrap_admins()

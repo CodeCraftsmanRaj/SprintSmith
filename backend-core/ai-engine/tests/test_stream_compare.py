@@ -90,6 +90,31 @@ def test_generate_stream_ignores_non_mapping_node_delta(monkeypatch):
     assert resp.text.endswith("data: [DONE]\n\n")
 
 
+def test_generate_stream_passes_langfuse_config_and_critique(monkeypatch):
+    observed = {}
+    config = {"callbacks": [object()]}
+
+    class ConfigAwareGraph:
+        async def astream(self, initial, config=None, stream_mode=None):
+            observed["config"] = config
+            yield {"qa": {"eval_score": 0.5, "critique": "Needs detail", "retry_count": 1}}
+
+    monkeypatch.setattr(sop_graph, "SOP_GRAPH", ConfigAwareGraph())
+    monkeypatch.setattr("app.tracking.langfuse.build_langfuse_config", lambda **kwargs: config)
+    monkeypatch.setattr("app.tracking.langfuse.flush_langfuse", lambda: observed.setdefault("flushed", True))
+
+    resp = TestClient(app).post("/generate/stream", json={
+        "project_id": "p1", "artifact_type": "user_story", "requirement_text": "x",
+    })
+
+    assert resp.status_code == 200
+    assert observed["config"] is config
+    assert observed["flushed"] is True
+    events = _events(resp.text)
+    assert events[0]["critique"] == "Needs detail"
+    assert events[0]["retry"] == 1
+
+
 def test_compare_runs_both_aliases(monkeypatch):
     seen = []
 

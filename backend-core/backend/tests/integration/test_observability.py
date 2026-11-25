@@ -31,6 +31,14 @@ def _response(payload, status=200):
     )
 
 
+def _invalid_json_response():
+    return httpx.Response(
+        200,
+        content=b"{not valid json",
+        request=httpx.Request("GET", "https://langfuse.example/api/public/v2/observations"),
+    )
+
+
 def _enable_langfuse(monkeypatch):
     monkeypatch.setattr(observability.settings, "langfuse_enabled", True)
     monkeypatch.setattr(observability.settings, "langfuse_public_key", "pk-test")
@@ -131,3 +139,14 @@ def test_langfuse_observations_maps_connection_errors(
 
     assert response.status_code == 502
     assert response.json()["detail"] == "Could not reach the Langfuse API"
+
+
+def test_langfuse_observations_handles_invalid_json_body(client, admin_headers, monkeypatch):
+    _enable_langfuse(monkeypatch)
+    fake = FakeAsyncClient(responses=[_invalid_json_response()])
+    monkeypatch.setattr(observability.httpx, "AsyncClient", lambda **kwargs: fake)
+
+    response = client.get("/api/v1/observability/langfuse", headers=admin_headers)
+
+    assert response.status_code == 502
+    assert "invalid observations response" in response.json()["detail"]
