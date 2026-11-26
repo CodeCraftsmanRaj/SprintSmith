@@ -72,6 +72,16 @@ ingestion. Shared domain, retrieval, provider, and observability packages will
 be added under `packages/` as their contracts stabilize. A frontend is reserved
 for later work and is not included yet.
 
+## Architecture and workflows
+
+### System architecture
+
+![SprintSmith system architecture](docs/images/architecture-overview.png)
+
+### Document ingestion and generation flows
+
+![Document ingestion and generation workflows](docs/images/ingestion-and-generation-flow.png)
+
 ## What is implemented
 
 - FastAPI service with health, readiness, metrics, and initial search endpoints
